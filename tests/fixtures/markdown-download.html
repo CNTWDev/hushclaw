@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh">
+<meta charset="utf-8">
+<title>Markdown download regression</title>
+<h1>Markdown 下载兼容性测试</h1>
+<p>模拟浏览器暴露另存为接口，但调用时拒绝使用。</p>
+<button id="download">Download Markdown</button>
+<output id="result" role="status">Ready</output>
+<script type="module">
+  import { saveMarkdownFile } from '../../hushclaw/web/modules/download.js';
+  window.showSaveFilePicker = async () => {
+    throw new DOMException('Simulated embedded-browser restriction', 'SecurityError');
+  };
+  document.querySelector('#download').addEventListener('click', async () => {
+    const output = document.querySelector('#result');
+    try {
+      output.textContent = await saveMarkdownFile('# 下载测试\n\n中文与 **Markdown**。\n', 'hushclaw-download-test.md');
+    } catch (error) {
+      output.textContent = `Failed: ${error.name}`;
+    }
+  });
+</script>
+</html>

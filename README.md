@@ -200,15 +200,30 @@ DYNAMIC SUFFIX ── rebuilt every query ────────────�
   Budget: context.dynamic_budget  (default 2500 tokens)
 ```
 
-When history overflows, three compaction strategies:
+When history overflows, the active conversation uses a bounded continuity checkpoint:
 
 | Strategy | Effect |
 |---|---|
-| `lossless` | Archives raw turns to SQLite before summarizing — nothing lost |
-| `summarize` | Summarizes and discards; smaller footprint |
-| `abstractive` | Extracts transferable patterns only, no verbatim facts |
+| `lossless` | Structured continuity summary plus an additional searchable archive |
+| `summarize` / `abstractive` | Structured continuity summary; no additional archive. Abstract-only compression is no longer used for active conversations |
+| `prune_tool_results` | Replaces older tool outputs with placeholders, retaining valid call/result pairs |
 
-Compaction preserves session lineage and active working state — the agent never "loses the plot" mid-task.
+Recent original turns and current user corrections take precedence over older summaries,
+working state, and cross-session memory. Durable turns/events remain the source of truth;
+summaries are necessarily lossy aids, not a substitute for all session history.
+
+Checkpoints record a retained-message boundary and a fingerprint of the covered prefix.
+Restart restores **summary + the complete subsequent conversation**, scoped to the thread.
+Changed/excluded history invalidates a checkpoint and falls back to original records.
+Summary failure, empty output or truncation keeps the original context; oversized summary
+inputs are processed in chunks rather than silently dropped. This can temporarily leave
+history above its soft budget when the summary provider is unavailable.
+
+Schema v9 stores these checkpoints in the database (encrypted when database encryption
+is enabled). The normal startup migration backs up an existing database before upgrading.
+Legacy `summary.md` files and original records are preserved, but unbounded legacy summaries
+are no longer used to replace conversation history. The next successful compaction creates
+a verified checkpoint; the first long conversation after upgrading may therefore take longer.
 
 ---
 

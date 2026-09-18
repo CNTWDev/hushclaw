@@ -9,6 +9,7 @@ import { showToast, escHtml, els, send, getCurrentSessionId } from "../state.js"
 import { markdownSurfaceClass, setMarkdownContent, unmountMarkdown } from "../markdown.js";
 import { addMessageReference } from "../events/references.js";
 import { openConfirm } from "../modal.js";
+import { downloadBlob, saveMarkdownFile } from "../download.js";
 
 const HTML2CANVAS_URL = "/html2canvas.min.js";
 const HTML2CANVAS_CDN = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
@@ -516,17 +517,6 @@ async function _waitForShareCardAssets(node) {
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 }
 
-function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
 // ── Share card helpers ─────────────────────────────────────────────────────
 
 function _fmtShareDatetime(msgEl) {
@@ -939,35 +929,26 @@ function _buildMessageActionButtons(msgEl, bubbleEl) {
   mdBtn.title = "Download as Markdown file (with Q&A context + attribution)";
   mdBtn.addEventListener("click", async (ev) => {
     ev.stopPropagation();
+    if (mdBtn.disabled) return;
     const mdOrigHtml = mdBtn.innerHTML;
-    const text = msgEl.dataset.role === "ai"
-      ? _buildShareMarkdown(bubbleEl, msgEl)
-      : _buildUserDownloadMarkdown(bubbleEl, msgEl);
-    const now      = new Date();
-    const datePart = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
-    const timePart = `${String(now.getHours()).padStart(2,"0")}${String(now.getMinutes()).padStart(2,"0")}`;
-    const filename = `hushclaw-${datePart}-${timePart}.md`;
+    mdBtn.disabled = true;
     try {
-      if (typeof window.showSaveFilePicker === "function") {
-        const fh = await window.showSaveFilePicker({
-          suggestedName: filename,
-          types: [{ description: "Markdown", accept: { "text/markdown": [".md"] } }],
-        });
-        const writable = await fh.createWritable();
-        await writable.write(text);
-        await writable.close();
-      } else {
-        const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
-        const url  = URL.createObjectURL(blob);
-        const a    = Object.assign(document.createElement("a"), { href: url, download: filename });
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
+      const text = msgEl.dataset.role === "ai"
+        ? _buildShareMarkdown(bubbleEl, msgEl)
+        : _buildUserDownloadMarkdown(bubbleEl, msgEl);
+      const now = new Date();
+      const datePart = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+      const timePart = `${String(now.getHours()).padStart(2,"0")}${String(now.getMinutes()).padStart(2,"0")}`;
+      const result = await saveMarkdownFile(text, `hushclaw-${datePart}-${timePart}.md`);
+      if (result !== "cancelled") {
+        setCopyBtnTempText(mdBtn, result === "saved" ? "✓ Saved" : "✓ Download started", mdOrigHtml);
       }
-      setCopyBtnTempText(mdBtn, "✓ Saved", mdOrigHtml);
     } catch (err) {
-      if (err?.name !== "AbortError") setCopyBtnTempText(mdBtn, "Failed", mdOrigHtml);
+      console.error("[download] Markdown export failed", { name: err?.name || "Error" });
+      setCopyBtnTempText(mdBtn, "Failed", mdOrigHtml);
+      showToast("Markdown download failed. Please retry in a standard browser or use Copy.", "error");
+    } finally {
+      mdBtn.disabled = false;
     }
   });
 

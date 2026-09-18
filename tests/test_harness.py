@@ -241,10 +241,11 @@ class TestHarnessFactoryRebuild(unittest.TestCase):
 
             loop = HarnessFactory.rebuild_from_thread(thread_id, agent)
 
-            self.assertEqual([m.role for m in loop._context], ["user", "tool", "assistant"])
+            self.assertEqual([m.role for m in loop._context], ["user", "assistant", "tool", "assistant"])
             self.assertEqual(loop._context[0].content, "fresh event user")
-            self.assertEqual(loop._context[1].content, "tool output")
-            self.assertEqual(loop._context[2].content, "fresh event assistant")
+            self.assertEqual(loop._context[1].content[0]["id"], "tc-1")
+            self.assertEqual(loop._context[2].content, "tool output")
+            self.assertEqual(loop._context[3].content, "fresh event assistant")
             self.assertEqual(loop._session_input_tokens, 11)
             self.assertEqual(loop._session_output_tokens, 22)
 

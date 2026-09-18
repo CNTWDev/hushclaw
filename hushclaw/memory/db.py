@@ -23,7 +23,7 @@ from hushclaw.memory.encryption import (
     get_sqlcipher_driver,
 )
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 DB_NAME = "memory.db"
 DB_SIDE_CARS = (DB_NAME, f"{DB_NAME}-wal", f"{DB_NAME}-shm")
 APPLICATION_ID = 0x4853434C  # "HSCL"; identifies HushClaw-owned SQLite files.
@@ -1016,6 +1016,20 @@ _VERSIONED_MIGRATIONS = (
                 storage_path TEXT NOT NULL
             )""",
             "CREATE INDEX IF NOT EXISTS file_locations_path ON file_locations(storage_path)",
+        ),
+    ),
+    SchemaMigration(
+        version=9,
+        name="bounded-context-checkpoints",
+        statements=(
+            """CREATE TABLE IF NOT EXISTS context_checkpoints (
+                session_id TEXT NOT NULL,
+                thread_id TEXT NOT NULL DEFAULT '',
+                summary TEXT NOT NULL,
+                resume_message_id TEXT NOT NULL,
+                prefix_hash TEXT NOT NULL,
+                PRIMARY KEY (session_id, thread_id)
+            )""",
         ),
     ),
 )

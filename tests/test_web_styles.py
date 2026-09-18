@@ -207,7 +207,7 @@ def test_ui_foundations_match_the_measured_product_control_scale():
     assert index_html.index('/styles/harness-shell.css') < index_html.index('/styles/ui-foundations.css')
     assert index_html.index('/styles/ui-foundations.css') < index_html.index('/styles/chat-product.css')
     assert '"/styles/ui-foundations.css"' in sw_js
-    assert 'const CACHE = "hushclaw-v37";' in sw_js
+    assert 'const CACHE = "hushclaw-v38";' in sw_js
     assert '--sans: -apple-system, BlinkMacSystemFont' in ui_css
     assert '--ui-type-body: 13px;' in ui_css
     assert '--ui-type-reading: 13.5px;' in ui_css

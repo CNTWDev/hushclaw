@@ -2452,7 +2452,7 @@ class MemoryStore:
 
     def load_session_turns(self, session_id: str) -> list[dict]:
         rows = self.conn.execute(
-            "SELECT * FROM turns WHERE session=? ORDER BY ts",
+            "SELECT * FROM turns WHERE session=? ORDER BY ts, rowid",
             (session_id,),
         ).fetchall()
         turns = []
@@ -2969,6 +2969,7 @@ class MemoryStore:
         self.conn.execute("DELETE FROM turns_fts WHERE session=?", (session_id,))
         self.conn.execute("DELETE FROM turns WHERE session=?", (session_id,))
         self.conn.execute("DELETE FROM session_lineage WHERE session_id=?", (session_id,))
+        self.conn.execute("DELETE FROM context_checkpoints WHERE session_id=?", (session_id,))
         self.conn.execute("DELETE FROM sessions WHERE session_id=?", (session_id,))
         self.conn.commit()
         session_dir = self.sessions_dir / session_id
@@ -2981,6 +2982,18 @@ class MemoryStore:
         session_dir = self.sessions_dir / session_id
         session_dir.mkdir(parents=True, exist_ok=True)
         (session_dir / "summary.md").write_text(summary, encoding="utf-8")
+
+    def restore_context(self, session_id: str, thread_id: str = ""):
+        from hushclaw.memory.context_history import restore_history
+        return restore_history(self, session_id, thread_id)
+
+    def prepare_context_checkpoint(self, session_id: str, resume_message_id: str):
+        from hushclaw.memory.context_history import prepare_checkpoint
+        return prepare_checkpoint(self, session_id, resume_message_id)
+
+    def save_context_checkpoint(self, checkpoint: dict, summary: str) -> bool:
+        from hushclaw.memory.context_history import save_checkpoint
+        return save_checkpoint(self, checkpoint, summary)
 
     def load_session_summary(self, session_id: str) -> str | None:
         p = self.sessions_dir / session_id / "summary.md"

@@ -85,7 +85,7 @@ def test_database_upgrade_records_verified_migration_and_private_modes(tmp_path)
             (SCHEMA_VERSION,),
         ).fetchone()
         assert row is not None
-        assert row["name"] == "independent-file-locations"
+        assert row["name"] == "bounded-context-checkpoints"
         assert len(row["checksum"]) == 64
         assert store.conn.execute("PRAGMA application_id").fetchone()[0] == APPLICATION_ID
         assert store.conn.execute("PRAGMA secure_delete").fetchone()[0] == 2
@@ -1247,7 +1247,8 @@ def test_session_log_replay_context_and_token_totals():
     )
 
     messages = store.session_log.replay_context(thread_id="th-replay")
-    assert [m.role for m in messages] == ["tool", "user", "assistant"] or [m.role for m in messages] == ["user", "tool", "assistant"]
+    assert [m.role for m in messages] == ["assistant", "tool", "user", "assistant"]
+    assert messages[0].content[0]["id"] == messages[1].tool_call_id == "tc-9"
     assert any(m.content == "hello from log" for m in messages if m.role == "user")
     assert any(m.content == "saved" for m in messages if m.role == "tool")
     assert any(m.content == "hi from log" for m in messages if m.role == "assistant")

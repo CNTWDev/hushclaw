@@ -604,14 +604,13 @@ class ContextAssembler:
 
         cached_ws = self._ws_cache.get(session_id)
         if cached_ws is not None and cached_ws[1] == ws_mtime:
-            return cached_ws[0]
-
-        working_state = memory.load_session_working_state(session_id)
-        # Evict oldest entry if cache is full (simple LRU-lite).
-        if len(self._ws_cache) >= 128:
-            oldest = next(iter(self._ws_cache))
-            del self._ws_cache[oldest]
-        self._ws_cache[session_id] = (working_state, ws_mtime)
+            working_state = cached_ws[0]
+        else:
+            working_state = memory.load_session_working_state(session_id)
+            if len(self._ws_cache) >= 128:
+                oldest = next(iter(self._ws_cache))
+                del self._ws_cache[oldest]
+            self._ws_cache[session_id] = (working_state, ws_mtime)
 
         global_state = getattr(memory, "load_global_working_state", lambda: None)()
         parts = []

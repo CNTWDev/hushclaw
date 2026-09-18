@@ -1141,7 +1141,10 @@ class AgentLoop:
                     tool_name=self._ensure_tool_surface().provider_tool_name(tc.id, tc.name),
                 ))
 
-        self._context.append(Message(role="user", content=user_input, images=list(images or [])))
+        self._context.append(Message(
+            role="user", content=user_input, images=list(images or []),
+            source_id=f"event:{_user_event_id}" if _user_event_id else (f"turn:{_user_turn_id}" if _user_turn_id else ""),
+        ))
 
         # Preflight: compress before entering the tool loop so we never begin a
         # turn already over budget. Up to 3 passes: first pass typically only
@@ -2001,26 +2004,8 @@ class AgentLoop:
     def restore_session(self, session_id: str) -> None:
         """Restore a previous session into the active context."""
         self.session_id = session_id
-        replayed = self.memory.session_log.replay_context(session_id=session_id)
-        turns = self.memory._apply_message_states(self.memory.load_session_turns(session_id), include_hidden=False)
-        if replayed:
-            self._context = replayed
-        else:
-            self._context = []
-            for t in turns:
-                # Skip tool-role turns: they require tool_call_id to be valid, but
-                # that field is not persisted to the DB.  Including them without the
-                # matching tool_use blocks causes Anthropic API 400 errors.
-                if t["role"] == "tool":
-                    continue
-                if t.get("excluded"):
-                    continue
-                self._context.append(Message(role=t["role"], content=t["content"]))
-
-        # If there's a summary, use it as compressed context
-        summary = self.memory.load_session_summary(session_id)
-        if summary:
-            self._context = [Message(role="user", content=f"[Session summary]\n{summary}")]
+        self._context = self.memory.restore_context(session_id)
+        summary = any(m.context_kind == "summary" for m in self._context)
         hook_bus = getattr(self, "hook_bus", None)
         if hook_bus is not None:
             try:
@@ -2029,7 +2014,7 @@ class AgentLoop:
             except RuntimeError:
                 loop = None
             payload = self._hook_payload(
-                restored_turns=len(turns),
+                restored_turns=len(self._context),
                 used_summary=bool(summary),
             )
             if loop and loop.is_running():
@@ -2048,16 +2033,8 @@ class AgentLoop:
 
         session_id = str(row["session_id"])
         self.session_id = session_id
-        replayed = self.memory.session_log.replay_context(thread_id=thread_id)
-        if replayed:
-            self._context = replayed
-        else:
-            self.restore_session(session_id)
-            return
-
-        summary = self.memory.load_session_summary(session_id)
-        if summary:
-            self._context = [Message(role="user", content=f"[Session summary]\n{summary}")]
+        self._context = self.memory.restore_context(session_id, thread_id)
+        summary = any(m.context_kind == "summary" for m in self._context)
 
         hook_bus = getattr(self, "hook_bus", None)
         if hook_bus is not None:

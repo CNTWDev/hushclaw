@@ -95,6 +95,9 @@ class Message:
     # Multimodal: list of data URIs ("data:image/jpeg;base64,...") or HTTPS URLs.
     # Populated only for user-role messages. Provider formatters inject image blocks.
     images: list[str] = field(default_factory=list)
+    # Local replay/checkpoint metadata; never sent to a provider.
+    source_id: str = ""
+    context_kind: str = ""
 
 
 @dataclass

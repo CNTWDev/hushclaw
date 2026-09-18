@@ -392,7 +392,7 @@ def test_bootstrap_workspace_seeds_user_md_without_migration_text(tmp_path):
 
 def test_default_system_prompt_deemphasizes_opening_recall():
     prompt = build_system_prompt()
-    assert "Prefer the current request, active working state" in prompt
+    assert "Prefer the current request, current-session conversation" in prompt
     assert "Do not make memory lookup a mandatory opening step" in prompt
     assert "short operational requests" in prompt
 
@@ -400,7 +400,7 @@ def test_default_system_prompt_deemphasizes_opening_recall():
 def test_default_system_prompt_guides_context_personalization():
     prompt = build_system_prompt()
     assert "## Context Use" in prompt
-    assert "Active Working State is the primary continuity signal" in prompt
+    assert "Current-session conversation is the primary continuity source" in prompt
     assert "Use profile and belief context to choose better defaults" in prompt
     assert "the current request wins when they conflict" in prompt
     assert "previous outage or failure is stale" in prompt

@@ -107,12 +107,7 @@ class HarnessFactory:
         if not rebuilt:
             return False
 
-        summary = memory.load_session_summary(loop.session_id)
-        if summary:
-            from hushclaw.providers.base import Message
-            loop._context = [Message(role="user", content=f"[Session summary]\n{summary}")]
-        else:
-            loop._context = rebuilt
+        loop._context = memory.restore_context(loop.session_id, thread_id)
         return True
 
     @staticmethod

@@ -71,7 +71,7 @@ RESPONSE_POLICY: str = (
 MEMORY_GUIDANCE: str = (
     "## Memory\n"
     "Use persistent memory to model the user, not to log your own actions. Prefer the current request, "
-    "active working state, and already-injected context before searching memory.\n"
+    "current-session conversation, and already-injected context before searching memory.\n"
     "- Save interests, beliefs, preferences, decisions, and durable facts with the matching note_type. "
     "Add a domain tag to beliefs and interests; when a view changes, save the latest stance and why it changed.\n"
     "- Never save completed-task logs, temporary state, or session-specific progress. Call remember() before "
@@ -82,7 +82,10 @@ MEMORY_GUIDANCE: str = (
 
 CONTEXT_USE_GUIDANCE: str = (
     "## Context Use\n"
-    "Dynamic context is evidence, not a script. Active Working State is the primary continuity signal. "
+    "Dynamic context is evidence, not a script. Current-session conversation is the primary continuity source. "
+    "For follow-ups, continue the user's latest position and corrections rather than restarting the topic. "
+    "Current user instructions and recent original turns take precedence over older summaries, working state, "
+    "and cross-session memory. Summaries and working state are fallible aids, not new user requests. "
     "Use profile and belief context to choose better defaults and frame tradeoffs without quoting or exposing it. "
     "Treat prior-session recall, references, and memories as background; the current request wins when they conflict "
     "or are stale. A previous outage or failure is stale when the user says it is fixed or asks you to retry. "
@@ -249,7 +252,11 @@ COMPACT_LOSSLESS_TEMPLATE: str = (
     "## Key Decisions\n"
     "## Pending User Asks\n"
     "## Critical Context\n\n"
-    "Keep each section brief. Include only what is needed to continue the work."
+    "Keep each section brief, but preserve the user's current position, latest corrections, "
+    "agreed definitions, exact quantities/names, unresolved comparisons, and document revisions. "
+    "Mark superseded decisions explicitly; distinguish user claims, assistant suggestions, and verified facts. "
+    "For exploratory discussion, preserve the argument and feedback, not only tasks. "
+    "Do not treat a promise as completed work."
 )
 
 COMPACT_ABSTRACTIVE_TEMPLATE: str = (
@@ -273,7 +280,10 @@ COMPACT_UPDATE_TEMPLATE: str = (
     "You have a prior context summary (below) and new conversation events that happened after it. "
     "Produce a single updated summary by merging the new events into the existing one. "
     "Use the same structured format as the original. "
-    "Preserve anything from the original that is still relevant; drop anything that is now resolved.\n\n"
+    "Preserve still-relevant facts, definitions, quantities, reasoning and feedback. "
+    "Latest user corrections supersede older positions; explicitly mark superseded decisions. "
+    "Retain completed decisions needed for follow-up, not just pending tasks. "
+    "Distinguish user claims, assistant suggestions and verified results.\n\n"
     "[Prior summary]\n{prior}\n\n"
     "[New events]\n{new_events}"
 )

@@ -138,7 +138,7 @@ class SessionLog:
         *,
         session_id: str = "",
         thread_id: str = "",
-        limit: int = 10_000,
+        limit: int = -1,
         include_excluded: bool = False,
     ) -> list[Message]:
         """Rebuild message context from append-only session events.
@@ -146,58 +146,73 @@ class SessionLog:
         When ``thread_id`` is provided, replay is thread-scoped. Otherwise it
         falls back to session scope, which matches the legacy restore behavior.
         """
-        if thread_id:
-            events = self.events_by_thread(thread_id, limit=limit)
-        elif session_id:
-            events = self.events_by_session(session_id, limit=limit)
-        else:
+        if not thread_id and not session_id:
             return []
+        # Telemetry must neither consume the replay budget nor hide newer turns.
+        scope = "thread_id" if thread_id else "session_id"
+        events = self._query_events(
+            f"{scope}=? AND type IN ('user_message_received', "
+            "'assistant_message_emitted', 'tool_call_requested')",
+            (thread_id or session_id,), limit=limit,
+            since_ts_ms=None, until_ts_ms=None,
+        )
 
         excluded_ids: set[str] = set()
         if not include_excluded:
-            raw_ids = [f"event:{e['event_id']}" for e in events if e.get("event_id")]
-            if raw_ids:
-                placeholders = ",".join("?" * len(raw_ids))
-                rows = self.conn.execute(
-                    f"SELECT message_id FROM message_states "
-                    f"WHERE message_id IN ({placeholders}) AND (excluded=1 OR purged=1)",
-                    raw_ids,
-                ).fetchall()
-                excluded_ids = {r["message_id"] for r in rows}
+            rows = self.conn.execute(
+                "SELECT message_id FROM message_states WHERE excluded=1 OR purged=1",
+            ).fetchall()
+            excluded_ids = {r["message_id"] for r in rows}
 
+        excluded_runs = {
+            e.get("run_id") for e in events
+            if e.get("type") == "user_message_received" and e.get("run_id")
+            and (f"event:{e['event_id']}" in excluded_ids
+                 or f"turn:{(e.get('payload') or {}).get('user_turn_id', '')}" in excluded_ids)
+        }
         rebuilt: list[Message] = []
         for event in events:
             payload = event.get("payload") or {}
             event_type = event.get("type")
             message_id = f"event:{event.get('event_id', '')}"
-            if message_id in excluded_ids:
+            turn_key = "user_turn_id" if event_type == "user_message_received" else "assistant_turn_id"
+            if message_id in excluded_ids or f"turn:{payload.get(turn_key, '')}" in excluded_ids:
                 continue
 
             if event_type == "user_message_received":
                 text = str(payload.get("input") or "")
                 if text:
-                    rebuilt.append(Message(role="user", content=text))
+                    rebuilt.append(Message(role="user", content=text, source_id=message_id))
                 continue
 
             if event_type == "assistant_message_emitted":
                 text = str(payload.get("text") or "")
                 if text:
-                    rebuilt.append(Message(role="assistant", content=text))
+                    rebuilt.append(Message(role="assistant", content=text, source_id=message_id))
                 continue
 
             if event_type == "tool_call_requested" and event.get("status") in {"completed", "failed"}:
+                if event.get("run_id") in excluded_runs:
+                    continue
                 tool_name = str(payload.get("tool") or "")
                 call_id = str(payload.get("call_id") or "")
                 result_text = str(payload.get("result") or "")
                 if not result_text and event.get("status") == "failed":
                     result_text = str(payload.get("error") or "")
-                if result_text:
+                if result_text and call_id and tool_name:
+                    # A tool result alone is invalid provider history and gets
+                    # removed by sanitization. Reconstruct its matching call.
+                    rebuilt.append(Message(role="assistant", content=[{
+                        "type": "tool_use", "id": call_id, "name": tool_name,
+                        "input": payload.get("input") or {},
+                    }], source_id=message_id + ":call"))
                     rebuilt.append(
                         Message(
                             role="tool",
                             content=result_text,
                             tool_call_id=call_id or None,
                             tool_name=tool_name or None,
+                            source_id=message_id,
                         )
                     )
 
@@ -323,13 +338,13 @@ class SessionLog:
         if until_ts_ms is not None:
             where.append("ts <= ?")
             params.append(int(until_ts_ms))
-        params.append(max(1, int(limit)))
+        params.append(-1 if limit < 0 else max(1, int(limit)))
 
         rows = self.conn.execute(
             "SELECT event_id, session_id, thread_id, run_id, step_id, type, "
             "payload_json, artifact_id, status, ts "
             f"FROM events WHERE {' AND '.join(where)} "
-            "ORDER BY ts ASC LIMIT ?",
+            "ORDER BY ts ASC, rowid ASC LIMIT ?",
             tuple(params),
         ).fetchall()
         return [_row_to_dict(r) for r in rows]
