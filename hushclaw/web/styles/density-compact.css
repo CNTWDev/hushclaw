@@ -1,27 +1,9 @@
 /*
  * Product density layer.
  *
- * This file is loaded last on purpose. It is the single place for the shared
- * typography and spacing scale used by chat, sessions, files, and runtime
- * surfaces. Theme files continue to own color; this file owns density only.
+ * Legacy feature density rules consume the shared tokens in ui-foundations.css.
+ * This layer does not redefine typography, controls, or theme colors.
  */
-:root {
-  --ui-font-meta: 9px;
-  --ui-font-label: 10px;
-  --ui-font-title: 11px;
-  --ui-font-body: 13px;
-  --ui-font-content-h1: 18px;
-  --ui-font-content-h2: 15.5px;
-  --ui-font-content-h3: 14px;
-  --ui-font-content-h4: 13px;
-  --ui-weight-regular: 450;
-  --ui-weight-medium: 550;
-  --ui-weight-strong: 600;
-  --ui-weight-emphasis: 650;
-  --ui-control-h: 27px;
-  --ui-radius-control: 8px;
-  --ui-radius-card: 10px;
-}
 
 /* ── Quiet workspace shell ────────────────────────────────────────────────
    Themes keep their color personality, while the product skeleton stays

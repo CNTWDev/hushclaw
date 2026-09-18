@@ -1,4 +1,4 @@
-const CACHE = "hushclaw-v33";
+const CACHE = "hushclaw-v37";
 const STATIC = [
   "/",
   "/index.html",
@@ -29,6 +29,7 @@ const STATIC = [
   "/styles/ui-lab.css",
   "/modules/ui-lab.js",
   "/modules/ui/ai-primitives.js",
+  "/modules/chat/stream-tail.js",
   "/modules/ui/composer-menu.js",
   "/modules/ui/selection-actions.js",
   "/modules/shell.js",

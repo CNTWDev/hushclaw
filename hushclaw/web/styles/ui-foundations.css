@@ -2,8 +2,8 @@
  * HushClaw UI foundations.
  *
  * This is the product-wide typography and control contract. It follows the
- * measured Beautiful UI proportions: Inter, 14px body copy, 13px fields,
- * 12.5px controls, 32px standard actions, neutral surfaces, hairline borders,
+ * role-based system typography: reading copy, compact scan labels, metadata,
+ * 32px standard actions, neutral surfaces, hairline borders,
  * and blue reserved for primary actions, focus, and selected navigation.
  *
  * Feature styles own layout. They should consume these tokens instead of
@@ -11,20 +11,38 @@
  */
 
 :root {
-  --sans: Inter, "Inter Fallback", ui-sans-serif, -apple-system,
-          BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
-          "Microsoft YaHei UI", sans-serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei UI", system-ui, sans-serif;
   --display: var(--sans);
   --reading: var(--sans);
 
-  --ui-type-body: 14px;
-  --ui-type-control: 12.5px;
+  --ui-type-body: 13px;
+  --ui-type-reading: 13.5px;
+  --ui-type-list: 12px;
+  --ui-type-control: 12px;
   --ui-type-input: 13px;
   --ui-type-label: 12px;
   --ui-type-meta: 11px;
-  --ui-type-title: 16px;
+  --ui-type-title: 18px;
+  --ui-type-heading: 16px;
   --ui-leading-body: 1.5;
-  --ui-tracking: -0.01em;
+  --ui-leading-reading: calc(22 / 13.5);
+  --ui-leading-list: 18px;
+  --ui-leading-control: 18px;
+  --ui-leading-meta: 16px;
+  --ui-tracking: normal;
+  --ui-weight-regular: 400;
+  --ui-weight-medium: 500;
+  --ui-weight-strong: 600;
+  --ui-weight-emphasis: var(--ui-weight-strong);
+  --ui-font-content-h1: 18px;
+  --ui-font-content-h2: 16px;
+  --ui-font-content-h3: 14px;
+  --ui-font-content-h4: 14px;
+  --ui-space-1: 4px;
+  --ui-space-2: 8px;
+  --ui-space-3: 12px;
+  --ui-space-4: 16px;
 
   --ui-control-height: 32px;
   --ui-control-height-compact: 28px;
@@ -45,7 +63,7 @@
   --ui-font-meta: var(--ui-type-meta);
   --ui-font-label: var(--ui-type-label);
   --ui-font-title: var(--ui-type-title);
-  --ui-font-body: var(--ui-type-body);
+  --ui-font-body: var(--ui-type-reading);
   --ui-control-h: var(--ui-control-height);
   --ui-radius-control: var(--ui-control-radius);
   --ui-radius-card: var(--ui-card-radius);
@@ -67,7 +85,7 @@ input,
 select,
 textarea {
   font-family: var(--sans);
-  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--ui-tracking);
 }
 
 /* ── Buttons ─────────────────────────────────────────────────────────── */
@@ -82,7 +100,7 @@ button {
   color: #fff;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 14%);
   font-size: var(--ui-type-control);
-  font-weight: 500;
+  font-weight: var(--ui-weight-medium);
   line-height: 1.5;
   letter-spacing: var(--ui-tracking);
   text-transform: none;
@@ -112,7 +130,7 @@ button.ghost-btn,
   color: var(--sub);
   box-shadow: var(--ui-control-shadow);
   font-size: var(--ui-type-control);
-  font-weight: 500;
+  font-weight: var(--ui-weight-medium);
   letter-spacing: var(--ui-tracking);
 }
 
@@ -166,7 +184,7 @@ button.muted-btn.small,
   color: #fff;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 14%);
   font-size: var(--ui-type-control);
-  font-weight: 500;
+  font-weight: var(--ui-weight-medium);
 }
 
 .agents-new-btn:hover,
@@ -234,6 +252,7 @@ button.ui-icon-action--danger:hover {
 button.ui-icon-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 @media (pointer: coarse) {
   :root { --ui-control-height-inline: 32px; }
+  button.tab, button.tab-settings { height: 40px; min-height: 40px; }
 }
 
 input[type="text"],
@@ -255,7 +274,7 @@ select {
   color: var(--text);
   box-shadow: var(--ui-control-shadow);
   font-size: var(--ui-type-input);
-  font-weight: 400;
+  font-weight: var(--ui-weight-regular);
   line-height: 1.4;
   letter-spacing: var(--ui-tracking);
 }
@@ -310,7 +329,7 @@ textarea::placeholder {
   color: var(--sub);
   box-shadow: none;
   font-size: var(--ui-type-label);
-  font-weight: 500;
+  font-weight: var(--ui-weight-medium);
 }
 
 .agent-filter-btn.active,
@@ -326,14 +345,17 @@ textarea::placeholder {
 
 .tab,
 .tab-settings {
+  height: 36px;
+  min-height: 36px;
   font-size: var(--ui-type-control);
-  font-weight: 500;
+  font-weight: var(--ui-weight-medium);
 }
 
 .tab span {
   font-size: var(--ui-type-control);
-  font-weight: 500;
+  font-weight: var(--ui-weight-medium);
 }
+.tab.active span { font-weight: var(--ui-weight-strong); }
 
 .tab.active {
   background: color-mix(in srgb, var(--surface2) 72%, var(--surface));
@@ -364,9 +386,9 @@ textarea::placeholder {
 .skills-library-title {
   font-family: var(--display);
   font-size: var(--ui-type-title);
-  font-weight: 600;
-  line-height: 1.35;
-  letter-spacing: -.025em;
+  font-weight: var(--ui-weight-strong);
+  line-height: 26px;
+  letter-spacing: normal;
 }
 
 .agents-toolbar,
@@ -389,8 +411,8 @@ textarea::placeholder {
 .tasks-section-title,
 .insights-eyebrow {
   font-size: var(--ui-type-meta);
-  font-weight: 600;
-  letter-spacing: .04em;
+  font-weight: var(--ui-weight-strong);
+  letter-spacing: normal;
 }
 
 .app-connectors-header p,
@@ -411,19 +433,19 @@ textarea::placeholder {
 .learning-item-title,
 .learning-outcome-skill {
   font-size: 13.5px;
-  font-weight: 600;
+  font-weight: var(--ui-weight-strong);
   line-height: 1.45;
 }
 
 .app-connector-card-name {
   font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -.015em;
+  font-weight: var(--ui-weight-strong);
+  letter-spacing: normal;
 }
 
 .app-connector-card-desc {
   font-size: var(--ui-type-label);
-  font-weight: 400;
+  font-weight: var(--ui-weight-regular);
   line-height: 1.5;
 }
 
@@ -431,13 +453,13 @@ textarea::placeholder {
 .app-connector-chips span,
 .app-connector-meta-chip,
 .app-connector-kind-chip {
-  font-size: 10.5px;
-  font-weight: 500;
+  font-size: var(--ui-type-meta);
+  font-weight: var(--ui-weight-medium);
 }
 
 .app-connector-card-footer {
   font-size: var(--ui-type-label);
-  font-weight: 600;
+  font-weight: var(--ui-weight-strong);
   letter-spacing: var(--ui-tracking);
 }
 
@@ -445,7 +467,7 @@ textarea::placeholder {
 .sched-title,
 .work-task-title {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: var(--ui-weight-medium);
   line-height: 1.45;
 }
 
@@ -487,8 +509,8 @@ textarea::placeholder {
   padding: 2px 7px;
   border-radius: 6px;
   font-family: var(--sans);
-  font-size: 10.5px;
-  font-weight: 500;
+  font-size: var(--ui-type-meta);
+  font-weight: var(--ui-weight-medium);
   line-height: 1.35;
   letter-spacing: 0;
 }
@@ -533,7 +555,7 @@ textarea::placeholder {
   flex-basis: 34px;
   border-radius: 9px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: var(--ui-weight-strong);
 }
 
 /* The chat owns its geometry, but not a different font language. */

@@ -15,10 +15,10 @@ def test_harness_shell_is_the_single_final_sitewide_layer():
     assert "ui-theme-unified.css" not in index_html
     assert "workbench-v2.css" not in index_html
     assert "gemini-shell.css" not in index_html
-    assert "--threads-drawer-w: 276px;" in harness_css
+    assert "--threads-drawer-w: 260px;" in harness_css
     assert "--workbench-w: 360px;" in harness_css
-    assert "--ui-font-body: 13px;" in density_css
-    assert "--ui-weight-medium: 550;" in density_css
+    assert "--ui-font-body:" not in density_css
+    assert "--ui-weight-medium:" not in density_css
     assert ".msg.ai .bubble.markdown-body" in density_css
     assert ".sidebar-session-title" in density_css
     assert ".file-item-name" in density_css
@@ -226,7 +226,7 @@ def test_runtime_process_feedback_uses_inline_progress_and_timing_summary():
     assert "function _perfSummary(perf = {})" in websocket_js
     assert 'label: "Timing"' in websocket_js
     assert "export function showAiProgress(summary, { clientTurnId = \"\" } = {})" in chat_js
-    assert 'showAiProgress("正在梳理…");' in chat_js
+    assert 'showAiProgress(runtimeActivityLabel(runtime));' in chat_js
     assert 'state._thinkingEl && !state._thinkingEl.isConnected' in chat_js
     assert 'if (keepInProgress) rehydrateInProgressUi(session_id);' in chat_js
     assert "if (feed.length > 20) feed.splice(0, feed.length - 20);" in state_js
@@ -317,6 +317,37 @@ def test_ai_interaction_primitives_share_one_state_and_motion_contract():
     assert "--ai-motion-reveal: 380ms;" in primitives_css
     assert '@media (prefers-reduced-motion: reduce)' in primitives_css
     assert "display: block !important;" in primitives_css
+
+
+def test_thinking_stage_changes_keep_one_node_and_use_real_runtime_metadata():
+    primitives = (ROOT / "hushclaw/web/modules/ui/ai-primitives.js").read_text()
+    websocket = (ROOT / "hushclaw/web/modules/websocket.js").read_text()
+    chat = (ROOT / "hushclaw/web/modules/chat.js").read_text()
+
+    assert "step.meta?.tool" in primitives
+    assert "step.meta?.round" in primitives
+    assert 'detailEl.dataset.detail !== detail' in primitives
+    assert 'translateY(-100%)' in primitives
+    assert 'translateY(100%)' in primitives
+    assert 'outgoing.setAttribute("aria-hidden", "true")' in primitives
+    assert websocket.count("discardActiveAiMsg({ preserveThinking: true });") == 2
+    assert "if (!preserveThinking) removeThinkingMsg();" in chat
+
+
+def test_stream_cursor_tracks_rendered_tail_and_disconnects_observers():
+    tail = (ROOT / "hushclaw/web/modules/chat/stream-tail.js").read_text()
+    css = (ROOT / "hushclaw/web/styles/ai-primitives.css").read_text()
+    chat = (ROOT / "hushclaw/web/modules/chat.js").read_text()
+
+    assert "range.getClientRects()" in tail
+    assert "new MutationObserver(schedule)" in tail
+    assert "new ResizeObserver(schedule)" in tail
+    assert "requestAnimationFrame(paint)" in tail
+    assert "mutation.disconnect();" in tail
+    assert "resize.disconnect();" in tail
+    assert "top: var(--stream-tail-y);" in css
+    assert "left: -12px;" not in css
+    assert chat.count("state._aiBubbleEl?._stopFollowingTail?.();") == 3
 
 
 def test_prompt_composer_unifies_sources_commands_and_selection_actions():

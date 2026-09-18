@@ -116,7 +116,7 @@ def test_chat_markdown_blocks_use_softer_line_based_surfaces():
 
 def test_chat_markdown_headings_use_single_rule_hierarchy():
     markdown_css = (ROOT / "hushclaw" / "web" / "styles" / "markdown-tight.css").read_text(encoding="utf-8")
-    density_css = (ROOT / "hushclaw" / "web" / "styles" / "density-compact.css").read_text(encoding="utf-8")
+    density_css = (ROOT / "hushclaw" / "web" / "styles" / "ui-foundations.css").read_text(encoding="utf-8")
 
     assert "border-bottom: 0;" in markdown_css
     assert ".markdown-surface-rich h1::after" in markdown_css
@@ -126,13 +126,13 @@ def test_chat_markdown_headings_use_single_rule_hierarchy():
     assert ':root[data-theme="vector"] .markdown-surface-rich h1::after' in markdown_css
     assert ':root[data-theme="vector"] .markdown-surface-rich h2::after' not in markdown_css
     assert "--ui-font-content-h1: 18px;" in density_css
-    assert "--ui-font-content-h2: 15.5px;" in density_css
+    assert "--ui-font-content-h2: 16px;" in density_css
     assert "--ui-font-content-h3: 14px;" in density_css
-    assert "--ui-font-content-h4: 13px;" in density_css
+    assert "--ui-font-content-h4: 14px;" in density_css
     assert "--md-h1-size: var(--ui-font-content-h1, 18px);" in markdown_css
-    assert "--md-h2-size: var(--ui-font-content-h2, 15.5px);" in markdown_css
+    assert "--md-h2-size: var(--ui-font-content-h2, 16px);" in markdown_css
     assert "--md-h3-size: var(--ui-font-content-h3, 14px);" in markdown_css
-    assert "--md-h4-size: var(--ui-font-content-h4, 13px);" in markdown_css
+    assert "--md-h4-size: var(--ui-font-content-h4, 14px);" in markdown_css
 
 
 def test_chat_markdown_hr_is_weaker_and_avoids_heading_double_rules():
@@ -146,13 +146,13 @@ def test_chat_markdown_hr_is_weaker_and_avoids_heading_double_rules():
 
 def test_chat_markdown_longform_reading_density_is_tighter():
     markdown_css = (ROOT / "hushclaw" / "web" / "styles" / "markdown-tight.css").read_text(encoding="utf-8")
-    density_css = (ROOT / "hushclaw" / "web" / "styles" / "density-compact.css").read_text(encoding="utf-8")
+    density_css = (ROOT / "hushclaw" / "web" / "styles" / "ui-foundations.css").read_text(encoding="utf-8")
 
-    assert "--ui-font-body: 13px;" in density_css
-    assert "--md-body-size: var(--ui-font-body, 13px);" in markdown_css
-    assert "--md-body-leading: 1.62;" in markdown_css
-    assert "--md-list-leading: 1.56;" in markdown_css
-    assert "--md-gap-md: 11px;" in markdown_css
+    assert "--ui-type-reading: 13.5px;" in density_css
+    assert "--md-body-size: var(--ui-font-body, 13.5px);" in markdown_css
+    assert "--md-body-leading: var(--ui-leading-reading, 1.63);" in markdown_css
+    assert "--md-list-leading: var(--ui-leading-reading, 1.63);" in markdown_css
+    assert "--md-gap-md: 12px;" in markdown_css
     assert "--md-measure: 74ch;" in markdown_css
     assert "max-width: min(100%, calc(var(--md-measure) + 4ch));" in markdown_css
     assert "color: color-mix(in srgb, var(--md-accent) 44%, var(--text));" in markdown_css
@@ -168,7 +168,7 @@ def test_chat_markdown_inline_code_and_tables_are_quieter_for_longform_reading()
     assert "background: color-mix(in srgb, var(--md-inline-code-bg) 70%, var(--surface2) 30%);" in markdown_css
     assert "color: color-mix(in srgb, var(--md-inline-code-color) 72%, var(--text));" in markdown_css
     assert "padding: 7px 10px;" in markdown_css
-    assert "font: 740 11px/1.45 var(--sans);" in markdown_css
+    assert "font: var(--ui-weight-strong) var(--md-table-size)/1.5 var(--sans);" in markdown_css
     assert "background: color-mix(in srgb, var(--md-table-row-alt) 78%, transparent);" in markdown_css
 
 
@@ -207,10 +207,12 @@ def test_ui_foundations_match_the_measured_product_control_scale():
     assert index_html.index('/styles/harness-shell.css') < index_html.index('/styles/ui-foundations.css')
     assert index_html.index('/styles/ui-foundations.css') < index_html.index('/styles/chat-product.css')
     assert '"/styles/ui-foundations.css"' in sw_js
-    assert 'const CACHE = "hushclaw-v33";' in sw_js
-    assert '--sans: Inter, "Inter Fallback", ui-sans-serif' in ui_css
-    assert '--ui-type-body: 14px;' in ui_css
-    assert '--ui-type-control: 12.5px;' in ui_css
+    assert 'const CACHE = "hushclaw-v37";' in sw_js
+    assert '--sans: -apple-system, BlinkMacSystemFont' in ui_css
+    assert '--ui-type-body: 13px;' in ui_css
+    assert '--ui-type-reading: 13.5px;' in ui_css
+    assert '--ui-type-list: 12px;' in ui_css
+    assert '--ui-type-control: 12px;' in ui_css
     assert '--ui-type-input: 13px;' in ui_css
     assert '--ui-control-height: 32px;' in ui_css
     assert '--ui-control-height-compact: 28px;' in ui_css
@@ -227,8 +229,37 @@ def test_ui_foundations_match_the_measured_product_control_scale():
 
     chat_css = (ROOT / "hushclaw" / "web" / "styles" / "chat-product.css").read_text(encoding="utf-8")
     assert ".composer-recommendation {\n  height: 28px;" in chat_css
-    assert "font-size: 11.5px;\n  font-weight: 500;" in chat_css
-    assert "font-size: 13px;\n  line-height: 1.55;" in chat_css
+    assert "font-size: var(--ui-type-meta);\n  font-weight: var(--ui-weight-medium);" in chat_css
+    assert "font-size: var(--ui-type-reading);\n  line-height: var(--ui-leading-reading);" in chat_css
+
+
+def test_product_typography_has_one_owner_and_no_theme_font_overrides():
+    import re
+
+    styles = ROOT / "hushclaw" / "web" / "styles"
+    ui_css = (styles / "ui-foundations.css").read_text()
+    assert '--ui-weight-regular: 400;' in ui_css
+    assert '--ui-weight-medium: 500;' in ui_css
+    assert '--ui-weight-strong: 600;' in ui_css
+    assert '--ui-type-meta: 11px;' in ui_css
+    assert '--ui-tracking: normal;' in ui_css
+    assert '--reading:' not in (styles / 'theme-modes.css').read_text()
+    assert '--sans:' not in (styles / 'harness-shell.css').read_text()
+    assert 'font-variant-numeric: tabular-nums' not in (styles / 'markdown-system.css').read_text()
+    for name in ['ui-foundations.css', 'chat-product.css', 'harness-shell.css',
+                 'ai-primitives.css', 'markdown-tight.css', 'markdown-system.css']:
+        css = (styles / name).read_text()
+        assert not re.search(r'font-weight:\s*\d', css), name
+        assert not re.search(r'letter-spacing:\s*-', css), name
+
+
+def test_new_conversation_is_a_single_sidebar_action():
+    web = ROOT / 'hushclaw' / 'web'
+    html = (web / 'index.html').read_text()
+    assert 'id="btn-new-session"' not in html
+    assert html.count('id="btn-new-session-sidebar"') == 1
+    assert '$("btn-new-session-sidebar")' in (web / 'modules' / 'state.js').read_text()
+    assert 'els.btnNew.addEventListener("click", () => {' in (web / 'modules' / 'events.js').read_text()
 
 
 def test_product_icons_share_one_blue_vector_source_and_high_resolution_assets():

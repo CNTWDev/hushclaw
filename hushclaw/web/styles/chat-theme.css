@@ -474,14 +474,6 @@
   z-index: 1;
 }
 
-.msg.ai .bubble.bubble-streaming.bubble-chunk-active::after {
-  opacity: 1;
-  transform: scale(1.14);
-  box-shadow:
-    10px 0 0 var(--ui-ai-card-dot-secondary),
-    0 0 12px color-mix(in srgb, var(--accent) 20%, transparent);
-}
-
 @keyframes ai-stream-bar-breathe {
   0%, 100% { opacity: 0.76; filter: saturate(1); }
   50% { opacity: 1; filter: saturate(1.12); }

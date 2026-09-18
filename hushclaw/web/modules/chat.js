@@ -16,7 +16,8 @@ import {
   resetActiveRound, finalizeActiveRound, renderToolResult,
 } from "./chat/tools.js";
 import { addCopyActions } from "./chat/export.js";
-import { AI_STATES, applyAiState, createAgentActivity } from "./ui/ai-primitives.js";
+import { AI_STATES, applyAiState, createAgentActivity, runtimeActivityLabel } from "./ui/ai-primitives.js";
+import { followStreamTail } from "./chat/stream-tail.js";
 
 // Re-export everything consumers need from the submodules, keeping the public
 // surface of chat.js unchanged.
@@ -178,7 +179,10 @@ function _setAiStreamingState(active) {
   msgEl.classList.toggle("msg-streaming", active);
   bubbleEl.classList.toggle("bubble-streaming", active);
   applyAiState(msgEl, active ? AI_STATES.STREAMING : AI_STATES.COMPLETED);
+  if (active && !bubbleEl._stopFollowingTail) bubbleEl._stopFollowingTail = followStreamTail(bubbleEl);
   if (!active) {
+    bubbleEl._stopFollowingTail?.();
+    bubbleEl._stopFollowingTail = null;
     bubbleEl.classList.remove("bubble-chunk-active");
   }
 }
@@ -925,6 +929,7 @@ export function appendChunk(text, { clientTurnId = "" } = {}) {
  */
 export function setChunkText(text, { clientTurnId = "" } = {}) {
   _promoteAiBubbleToStreamingMarkdown();
+  removeThinkingMsg();
   _bindClientTurnMessage("ai", clientTurnId, state._aiMsgEl);
   _setUserMessageQueued(clientTurnId, false);
   state._aiBubbleEl._raw = String(text || "");
@@ -957,9 +962,10 @@ export function setActiveRoundLabel(round, maxRounds = 0) {
   _activeRoundLabel = `R${n}${Number(maxRounds || 0) > 0 ? `/${Number(maxRounds)}` : ""}`;
 }
 
-export function discardActiveAiMsg() {
+export function discardActiveAiMsg({ preserveThinking = false } = {}) {
   _clearStreamTimers();
-  removeThinkingMsg();
+  if (!preserveThinking) removeThinkingMsg();
+  state._aiBubbleEl?._stopFollowingTail?.();
   if (state._aiMsgEl) state._aiMsgEl.remove();
   state._aiMsgEl = null;
   state._aiBubbleEl = null;
@@ -1065,10 +1071,7 @@ export function rehydrateInProgressUi(sessionId) {
   }
 
   if (!hasVisibleInProgressMarker()) {
-    const activeStep = runtime.active_step || {};
-    const restoredSummary = activeStep.summary || runtime.summary || "";
-    if (restoredSummary) showAiProgress(restoredSummary);
-    else showAiProgress("正在梳理…");
+    if (runtime.phase !== "streaming") showAiProgress(runtimeActivityLabel(runtime));
     return;
   }
   state._thinkingStart = startedAt;
@@ -1200,6 +1203,8 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
   _clearHistoryWindow();
   els.chatArea.classList.add("session-switching");
   _clearClientTurnBindings();
+  _clearStreamTimers();
+  state._aiBubbleEl?._stopFollowingTail?.();
   state._aiMsgEl     = null;
   state._aiBubbleEl  = null;
   state._lastUserMsgEl = null;
@@ -1253,6 +1258,8 @@ export function resetChatSessionUiState() {
   _clearHistoryWindow();
   removeThinkingMsg();
   _clearClientTurnBindings();
+  _clearStreamTimers();
+  state._aiBubbleEl?._stopFollowingTail?.();
   state._pendingSessionStart = false;
   clearCurrentSessionId();
   state.inTokens   = 0;

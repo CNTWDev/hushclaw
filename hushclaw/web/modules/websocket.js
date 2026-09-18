@@ -614,7 +614,7 @@ export function handleMessage(data) {
     case "tool_call":
       if (!isCurrentSessionEvent(data)) break;
       markEventSessionRunning(data, "tooling");
-      discardActiveAiMsg();
+      discardActiveAiMsg({ preserveThinking: true });
       pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
         level: "tool",
         label: data.tool || "tool",
@@ -626,7 +626,7 @@ export function handleMessage(data) {
       break;
     case "round_info":
       if (!isCurrentSessionEvent(data)) break;
-      discardActiveAiMsg();
+      discardActiveAiMsg({ preserveThinking: true });
       pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
         level: "thinking",
         label: "Round",
@@ -636,7 +636,7 @@ export function handleMessage(data) {
       createToolRound(data.round, data.max_rounds || 0);
       markEventSessionRunning(data, "thinking");
       setActiveRoundLabel(data.round, data.max_rounds || 0);
-      showAiProgress(Number(data.round || 0) > 1 ? "正在继续分析…" : "正在梳理与推敲…");
+      showAiProgress(runtimeActivityLabel({ phase: "thinking", active_step: { meta: { round: data.round } } }));
       break;
     case "tool_result":
       if (!isCurrentSessionEvent(data)) break;

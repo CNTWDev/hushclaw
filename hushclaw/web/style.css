@@ -23,11 +23,8 @@
   /* Monospace — JetBrains Mono: tighter stroke contrast, good CJK comment spacing */
   --font: "JetBrains Mono", "Cascadia Code", "Fira Code", ui-monospace, monospace;
 
-  /* UI sans — compact product UI face with CJK fallbacks.
-     CJK fallback order: Noto Sans CJK SC first (screen-optimised), then YaHei as safety net. */
-  --sans: "Plus Jakarta Sans", "PingFang SC", "Hiragino Sans GB",
-          "Noto Sans CJK SC", "Microsoft YaHei UI", system-ui, -apple-system,
-          BlinkMacSystemFont, sans-serif;
+  /* Minimal standalone fallback; ui-foundations.css owns product typography. */
+  --sans: system-ui, sans-serif;
 
   /* Product surfaces use the same sans stack for headings and body copy. */
   --display: var(--sans);

@@ -45,6 +45,7 @@ const LANGS = {
     composer_hint: "Use / for skills · @ for agents",
     empty_title: "What are we working on?",
     new_topic: "New Topic",
+    new_chat_short: "New",
     export:    "Export",
     // Agents panel
     refresh:       "Refresh",
@@ -192,6 +193,7 @@ const LANGS = {
     composer_hint: "输入 / 选择技能 · @ 选择 Agent",
     empty_title: "今天想一起完成什么？",
     new_topic: "新话题",
+    new_chat_short: "新建",
     export:    "导出",
     refresh:       "刷新",
     new_agent:     "+ 新建智能体",

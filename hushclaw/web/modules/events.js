@@ -344,7 +344,10 @@ els.input.addEventListener("paste", async (ev) => {
   await addFilesAsAttachments(images);
 });
 
-els.btnNew.addEventListener("click", newSession);
+els.btnNew.addEventListener("click", () => {
+  newSession();
+  els.input.focus();
+});
 els.btnExportPdf?.addEventListener("click", () => exportCurrentSessionAsPdf(els.btnExportPdf));
 
 function initTabLabels() {

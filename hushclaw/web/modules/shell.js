@@ -100,11 +100,6 @@ toggle?.addEventListener("click", () => {
   try { localStorage.setItem(RAIL_KEY, next ? "1" : "0"); } catch {}
 });
 
-document.getElementById("btn-new-session-sidebar")?.addEventListener("click", () => {
-  document.getElementById("btn-new-session")?.click();
-  document.getElementById("input")?.focus();
-});
-
 window.addEventListener("resize", () => {
   if (window.innerWidth <= 760 && body.classList.contains("app-rail-expanded")) {
     applyRailState(false);
@@ -115,7 +110,7 @@ wireColumnResize({
   handleId: "sessions-resize-handle",
   variable: "--threads-drawer-w",
   key: THREADS_WIDTH_KEY,
-  initial: 276,
+  initial: 260,
   min: 220,
   max: 420,
 });

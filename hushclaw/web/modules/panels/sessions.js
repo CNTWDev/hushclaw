@@ -529,14 +529,14 @@ function _buildSessionRow(s) {
           ${runtimeLabel ? `<span class="sidebar-session-status">${escHtml(runtimeLabel)}</span>` : ""}
         </div>
         <div class="session-item-actions">
-          <button class="session-inline-action session-rename-btn" data-session-id="${escHtml(s.session_id || "")}" title="Rename session" aria-label="Rename session">
-            <span class="session-inline-action-icon">✎</span>
+          <button class="session-inline-action session-rename-btn ui-icon-action" data-session-id="${escHtml(s.session_id || "")}" title="Rename session" aria-label="Rename session">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 3 5 5-12 12-6 1 1-6ZM14 5l5 5"/></svg>
           </button>
-          <button class="session-inline-action session-move-btn" data-session-id="${escHtml(s.session_id || "")}" title="Move to workspace" aria-label="Move to workspace">
-            <span class="session-inline-action-icon">⇄</span>
+          <button class="session-inline-action session-move-btn ui-icon-action" data-session-id="${escHtml(s.session_id || "")}" title="Move to workspace" aria-label="Move to workspace">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h16m-4-4 4 4-4 4M20 16H4m4-4-4 4 4 4"/></svg>
           </button>
-          <button class="session-inline-action session-delete-btn" data-session-id="${escHtml(s.session_id || "")}" title="Delete session" aria-label="Delete session">
-            <span class="session-inline-action-icon">✕</span>
+          <button class="session-inline-action session-delete-btn ui-icon-action ui-icon-action--danger" data-session-id="${escHtml(s.session_id || "")}" title="Delete session" aria-label="Delete session">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg>
           </button>
         </div>
       </div>
@@ -789,8 +789,9 @@ function _applySessionsCollapsed(collapsed) {
   _sessionsCollapsed = !!collapsed;
   document.body.classList.toggle("sessions-collapsed", _sessionsCollapsed);
   if (els.btnToggleSess) {
-    els.btnToggleSess.textContent = _sessionsCollapsed ? "⟩" : "⟨";
     els.btnToggleSess.title = _sessionsCollapsed ? "Expand sessions" : "Collapse sessions";
+    els.btnToggleSess.setAttribute("aria-label", els.btnToggleSess.title);
+    els.btnToggleSess.setAttribute("aria-expanded", String(!_sessionsCollapsed));
   }
   if (els.btnToggleSessInline) {
     els.btnToggleSessInline.classList.toggle("hidden", !_sessionsCollapsed);

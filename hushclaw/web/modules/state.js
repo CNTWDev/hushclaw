@@ -529,7 +529,7 @@ export const els = {
   btnHandoverDone:   $("btn-handover-done"),
   handoverBanner:    $("handover-banner"),
   handoverMsg:       $("handover-msg"),
-  btnNew:            $("btn-new-session"),
+  btnNew:            $("btn-new-session-sidebar"),
   btnExportPdf:      $("btn-export-pdf"),
   sessionLabel:      $("session-label"),
   connStatus:        $("conn-status"),

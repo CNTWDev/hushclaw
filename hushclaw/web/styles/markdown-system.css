@@ -8,7 +8,7 @@
  */
 
 :root {
-  --md-font-body: var(--sans, Inter, ui-sans-serif, system-ui, sans-serif);
+  --md-font-body: var(--sans, system-ui, sans-serif);
   --md-font-code: var(--font, "SF Mono", "JetBrains Mono", ui-monospace, monospace);
   --md-reading-measure: 74ch;
   --md-document-measure: 82ch;
@@ -20,7 +20,7 @@
 
 .markdown-surface {
   font-family: var(--md-font-body);
-  font-variant-numeric: tabular-nums;
+  letter-spacing: normal;
   text-rendering: optimizeLegibility;
 }
 
@@ -34,9 +34,15 @@
   max-width: 100%;
 }
 
+/* Native HTML and Streamdown's inner block wrapper share edge spacing. */
+.markdown-surface-rich > :first-child,
+.markdown-surface .markdown-renderer > div > :first-child { margin-top: 0; }
+.markdown-surface-rich > :last-child,
+.markdown-surface .markdown-renderer > div > :last-child { margin-bottom: 0; }
+
 .markdown-density-reading {
-  --md-body-leading: 1.68;
-  --md-list-leading: 1.62;
+  --md-body-leading: var(--ui-leading-reading);
+  --md-list-leading: var(--ui-leading-reading);
   --md-measure: var(--md-reading-measure);
 }
 
@@ -135,7 +141,7 @@
 
 .markdown-surface-rich strong {
   color: var(--text);
-  font-weight: 680;
+  font-weight: var(--ui-weight-strong);
 }
 
 .markdown-surface-tool {

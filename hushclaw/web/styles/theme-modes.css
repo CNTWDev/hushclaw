@@ -17,35 +17,8 @@
  *   pearl  — Editorial paper + quiet teal signal      [reading/personal]
  *   slate  — Gunmetal steel + Ice-Cyan accent         [professional]
  *
- * Typography personality per theme (overrides style.css :root defaults):
- *   Retained themes use sans-serif reading content and restrained letter-spacing.
+ * Typography is shared across brightness modes, owned by ui-foundations.css.
  */
-
-/* ── Typography personality ─────────────────────────────────────────────────
-   Controls --body-ls (base letter-spacing) and --reading (reading font family).
-   These override the :root defaults in style.css.
-   ─────────────────────────────────────────────────────────────────────────── */
-
-/* Slate: precision / technical — tight, clinical */
-:root[data-theme="slate"] {
-  --body-ls: -0.012em;
-  --reading: "Plus Jakarta Sans", "PingFang SC", "Hiragino Sans GB",
-             "Noto Sans CJK SC", "Microsoft YaHei UI", system-ui, sans-serif;
-}
-
-/* Pearl: clean operator workspace — calm, neutral, low ornament */
-:root[data-theme="pearl"] {
-  --body-ls: 0;
-  --reading: "Plus Jakarta Sans", "PingFang SC", "Hiragino Sans GB",
-             "Noto Sans CJK SC", "Microsoft YaHei UI", system-ui, sans-serif;
-}
-
-/* Vector: cockpit precision — monochrome, technical, red only as signal */
-:root[data-theme="vector"] {
-  --body-ls: -0.01em;
-  --reading: "Plus Jakarta Sans", "PingFang SC", "Hiragino Sans GB",
-             "Noto Sans CJK SC", "Microsoft YaHei UI", system-ui, sans-serif;
-}
 
 /*
  *   --ok   green  (#86efac dark / #16a34a light) — "status healthy/good"

@@ -10,8 +10,9 @@
   --app-rail-w: 64px;
   --app-rail-w-md: 60px;
   --app-rail-w-sm: 54px;
-  --app-rail-expanded-w: 224px;
-  --threads-drawer-w: 276px;
+  --app-rail-expanded-w: 192px;
+  --threads-drawer-w: 260px;
+  --chat-chrome-height: 44px;
   --workbench-w: 360px;
   --hc-shell-radius: 14px;
   --hc-shell-shadow: 0 0 0 1px var(--border), 0 8px 28px color-mix(in srgb, var(--bg) 34%, transparent);
@@ -25,9 +26,6 @@
   --hc-label-secondary: color-mix(in srgb, var(--text) 68%, var(--muted));
   --hc-label-tertiary: color-mix(in srgb, var(--text) 45%, var(--muted));
   --font: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
-  --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
-          "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", sans-serif;
-  --display: var(--sans);
 }
 
 html,
@@ -48,8 +46,8 @@ body.app-rail-expanded {
 
 header.app-rail {
   width: var(--app-rail-w);
-  padding: 12px 10px;
-  gap: 14px;
+  padding: 8px 10px;
+  gap: 8px;
   background: var(--hc-bg-sidebar);
   border-right: 1px solid var(--hc-border-soft);
   transition: width 240ms cubic-bezier(.2, .7, .2, 1), padding 240ms ease;
@@ -102,7 +100,7 @@ body.app-rail-expanded .rail-brand-row .logo-copy {
 
 body.app-rail-expanded .logo-wordmark {
   font-size: 17px;
-  letter-spacing: -.035em;
+  letter-spacing: normal;
 }
 
 body.app-rail-expanded .logo-version,
@@ -141,7 +139,7 @@ body:not(.app-rail-expanded) .rail-brand-row .logo {
 
 .tabs {
   align-items: stretch;
-  gap: 5px;
+  gap: 3px;
 }
 
 .tab,
@@ -167,9 +165,9 @@ body:not(.app-rail-expanded) .rail-brand-row .logo {
   flex: 1 1 auto;
   opacity: 0;
   color: inherit;
-  font-size: 12.5px;
-  font-weight: 560;
-  letter-spacing: -.01em;
+  font-size: var(--ui-type-control);
+  font-weight: var(--ui-weight-medium);
+  letter-spacing: normal;
   text-transform: none;
   text-align: left;
   white-space: nowrap;
@@ -264,7 +262,7 @@ main {
 #panel-chat {
   display: grid;
   grid-template-columns: var(--threads-drawer-w) 5px minmax(0, 1fr);
-  grid-template-rows: 52px minmax(0, 1fr);
+  grid-template-rows: var(--chat-chrome-height) minmax(0, 1fr);
   isolation: isolate;
 }
 
@@ -303,10 +301,10 @@ body.sessions-collapsed #panel-chat {
   grid-row: 1;
   z-index: 4;
   width: 100%;
-  height: 52px;
-  padding: 9px 12px;
+  height: var(--chat-chrome-height);
+  padding: 8px 10px;
   flex-direction: row;
-  gap: 8px;
+  gap: 4px;
   border-right: 0;
   border-bottom: 1px solid var(--hc-border-soft);
   background: var(--hc-bg-sidebar);
@@ -322,18 +320,19 @@ body.sessions-collapsed #workspace-tab-strip { display: none !important; }
 .ws-tab {
   width: auto;
   min-width: max-content;
-  min-height: 34px;
-  max-height: 34px;
-  padding: 0 12px;
+  height: var(--ui-control-height-compact);
+  min-height: var(--ui-control-height-compact);
+  max-height: var(--ui-control-height-compact);
+  padding: 0 10px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 7px;
   background: transparent;
   box-shadow: none;
   writing-mode: horizontal-tb;
   transform: none;
-  font-size: 11px;
-  font-weight: 540;
-  letter-spacing: -.01em;
+  font-size: var(--ui-type-meta);
+  font-weight: var(--ui-weight-medium);
+  letter-spacing: normal;
 }
 
 .ws-tab:hover,
@@ -372,43 +371,33 @@ body.sessions-collapsed #sessions-sidebar {
 }
 
 .sidebar-header {
-  min-height: 54px;
-  padding: 12px 14px 8px;
+  min-height: 42px;
+  padding: 7px 10px;
   border: 0;
 }
 
 .sidebar-eyebrow { display: none; }
 
 .sidebar-title {
-  font-size: 15px;
-  font-weight: 620;
-  letter-spacing: -.025em;
-}
-
-.sidebar-actions .muted-btn.small {
-  width: 32px;
-  height: 32px;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-}
-
-.sidebar-actions .muted-btn.small:hover {
-  background: color-mix(in srgb, var(--surface3) 58%, transparent);
+  font-size: var(--ui-type-meta);
+  font-weight: var(--ui-weight-strong);
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 .sidebar-new-chat {
-  min-height: 40px;
-  margin: 4px 12px 10px;
-  padding: 0 14px;
+  height: var(--ui-control-height-compact);
+  min-height: var(--ui-control-height-compact);
+  margin: 0;
+  padding: 0 8px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 4px;
   border: 1px solid var(--hc-border-soft);
   border-radius: 8px;
   color: var(--text);
   background: color-mix(in srgb, var(--surface) 86%, var(--surface2));
-  font: 560 13px/1 var(--sans);
+  font: var(--ui-weight-medium) var(--ui-type-control)/var(--ui-leading-control) var(--sans);
   cursor: pointer;
 }
 
@@ -418,7 +407,8 @@ body.sessions-collapsed #sessions-sidebar {
 }
 
 .sessions-search {
-  padding: 0 12px 12px;
+  grid-template-columns: minmax(0, 1fr);
+  padding: 0 10px 7px;
   border: 0;
 }
 
@@ -441,8 +431,8 @@ body.sessions-collapsed #sessions-sidebar {
 #sessions-list { padding: 0 8px 12px; }
 
 .sidebar-session {
-  margin: 2px 0;
-  padding: 10px 12px;
+  margin: 1px 0;
+  padding: 7px 10px;
   border: 0;
   border-radius: 8px;
 }
@@ -456,7 +446,7 @@ body.sessions-collapsed #sessions-sidebar {
   box-shadow: inset 2px 0 0 color-mix(in srgb, var(--hc-blue) 70%, transparent);
 }
 
-.sidebar-session-title { font-size: 12.5px; font-weight: 540; }
+.sidebar-session-title { font-size: var(--ui-type-control); font-weight: var(--ui-weight-regular); }
 
 /* Column resize effects mirror the runtime composition contract: columns
    keep identity while their tracks change, so no panel is remounted. */
@@ -520,10 +510,10 @@ body.is-resizing-columns * {
 
 .chat-assistant-copy strong {
   font-size: 13.5px;
-  font-weight: 610;
+  font-weight: var(--ui-weight-strong);
 }
 
-.chat-session-title { font-size: 14px; font-weight: 560; }
+.chat-session-title { font-size: 14px; font-weight: var(--ui-weight-medium); }
 
 .chat-session-meta { opacity: .72; }
 
@@ -562,9 +552,9 @@ body.is-resizing-columns * {
   color: var(--text);
   font-family: var(--sans);
   font-size: clamp(26px, 2.6vw, 36px);
-  font-weight: 540;
+  font-weight: var(--ui-weight-medium);
   line-height: 1.2;
-  letter-spacing: -.035em;
+  letter-spacing: normal;
   text-align: center;
   white-space: normal;
 }
@@ -641,41 +631,16 @@ body.is-resizing-columns * {
   border: 0;
   border-radius: 10px;
   overflow: hidden;
-  color: transparent;
-  background: transparent;
-}
-
-#btn-attach::after {
-  content: "+";
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
   color: var(--text);
-  font: 380 25px/1 var(--sans);
+  background: transparent;
 }
 
 #btn-attach:hover { background: color-mix(in srgb, var(--surface3) 62%, transparent); }
 
-.composer-hint { font-size: 10.5px; }
+.composer-hint { font-size: var(--ui-type-meta); }
 
 .composer-status-pill,
 #btn-export-pdf { display: none; }
-
-#btn-new-session {
-  width: auto;
-  min-width: 36px;
-  height: 36px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--surface2) 72%, transparent);
-}
-
-#btn-new-session span {
-  display: inline;
-  font-size: 10px;
-}
 
 .send-btn,
 .stop-btn {
@@ -823,7 +788,6 @@ body.is-resizing-columns * {
   .chat-composer { padding: 7px 8px 12px; }
   #chat-composer .input-wrap { padding: 8px 8px 8px 12px; border-radius: 24px; }
   #input { min-height: 38px; font-size: 13px; }
-  #btn-new-session span,
   .composer-hint { display: none; }
   .chat-workbench {
     inset: 8px;
@@ -862,7 +826,7 @@ html,
 body {
   font-size: 14px;
   line-height: 1.5;
-  letter-spacing: -.006em;
+  letter-spacing: normal;
 }
 
 body::before { opacity: 0 !important; }
@@ -873,9 +837,9 @@ button {
   border-radius: 8px;
   background: var(--accent);
   color: #fff;
-  font-size: 12px;
-  font-weight: 560;
-  letter-spacing: -.005em;
+  font-size: var(--ui-type-meta);
+  font-weight: var(--ui-weight-medium);
+  letter-spacing: normal;
   text-transform: none;
   box-shadow: none;
   transition: background-color 150ms cubic-bezier(.4, 0, .2, 1), border-color 150ms cubic-bezier(.4, 0, .2, 1), color 150ms cubic-bezier(.4, 0, .2, 1), opacity 150ms ease;
@@ -886,7 +850,6 @@ button {
 .app-rail-toggle,
 .lang-toggle,
 #btn-attach,
-#btn-new-session,
 .send-btn,
 .stop-btn {
   box-shadow: none;
@@ -904,7 +867,7 @@ button.ghost-btn,
   border: 1px solid var(--border);
   box-shadow: none;
   text-transform: none;
-  letter-spacing: -.005em;
+  letter-spacing: normal;
 }
 
 button.secondary:hover,
@@ -994,8 +957,8 @@ textarea::placeholder { color: var(--muted); }
 .panel-title,
 .workbench-section-title {
   color: var(--text);
-  font-weight: 600;
-  letter-spacing: -.02em;
+  font-weight: var(--ui-weight-strong);
+  letter-spacing: normal;
 }
 
 .wizard-nav {
@@ -1044,9 +1007,9 @@ table,
 th {
   color: var(--sub);
   background: var(--surface2);
-  font-size: 11px;
-  font-weight: 560;
-  letter-spacing: .01em;
+  font-size: var(--ui-type-meta);
+  font-weight: var(--ui-weight-medium);
+  letter-spacing: normal;
   text-transform: none;
 }
 

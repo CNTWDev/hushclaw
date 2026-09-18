@@ -45,23 +45,27 @@ let _processDisclosureId = 0;
 // Public progress describes work, never raw arguments/results or model thoughts.
 export function toolActivityLabel(tool = "") {
   const name = String(tool).toLowerCase();
+  if (/skill/.test(name)) return "正在执行技能…";
   if (/search|browse|fetch|research/.test(name)) return "正在查找资料…";
   if (/recall|memory|remember/.test(name)) return "正在查阅记忆…";
   if (/read|list_dir|inspect/.test(name)) return "正在阅读文件…";
   if (/write|edit|patch|artifact|export/.test(name)) return "正在生成或更新文件…";
-  if (/skill/.test(name)) return "正在执行技能…";
   if (/agent|delegate/.test(name)) return "正在协调任务…";
   if (/shell|exec|python|code/.test(name)) return "正在运行和检查…";
   return "正在执行操作…";
 }
 
 export function runtimeActivityLabel(runtime = {}) {
+  const step = runtime.active_step || {};
   if (runtime.phase === "tool_call" || runtime.phase === "tooling") {
-    return toolActivityLabel(runtime.active_tool || runtime.tool || "");
+    return toolActivityLabel(step.meta?.tool || runtime.active_tool || runtime.tool || "");
   }
   if (runtime.phase === "queued" || runtime.status === "queued") return "等待开始…";
   if (runtime.phase === "recall") return "正在查阅记忆…";
   if (runtime.phase === "compacting") return "正在整理上下文…";
+  if (runtime.phase === "streaming") return "正在组织回复…";
+  const round = Number(step.meta?.round || 0);
+  if (round > 0) return `正在分析 · 第 ${round} 轮`;
   return "正在梳理与推敲…";
 }
 
@@ -115,16 +119,35 @@ export function createAgentActivity({
     const copyEl = root.querySelector(".ai-activity-copy");
     if (copyEl.textContent !== label) copyEl.textContent = label;
     const detailEl = root.querySelector(".ai-activity-detail");
-    if (detailEl.textContent !== detail) {
-      detailEl.textContent = detail;
+    if (detailEl.dataset.detail !== detail) {
+      const previous = detailEl.querySelector(".ai-activity-line:not(.is-outgoing)")?.textContent;
+      detailEl.getAnimations?.({ subtree: true }).forEach(animation => animation.cancel());
+      detailEl.replaceChildren();
+      detailEl.dataset.detail = detail;
       detailEl.title = detail;
-      detailEl.getAnimations?.().forEach(animation => animation.cancel());
-      // Animate real stage changes only, never every elapsed-time tick.
-      if (detail && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        detailEl.animate?.([
-          { opacity: 0, transform: "translateY(5px)" },
+      const current = document.createElement("span");
+      current.className = "ai-activity-line";
+      current.textContent = detail;
+      detailEl.append(current);
+      // One clipped row, old step exits upward as the actual new step enters.
+      // No synthetic ticker, backlog, or animations on elapsed-time ticks.
+      if (previous && detail && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        const outgoing = document.createElement("span");
+        outgoing.className = "ai-activity-line is-outgoing";
+        outgoing.textContent = previous;
+        outgoing.setAttribute("aria-hidden", "true");
+        detailEl.append(outgoing);
+        const options = { duration: 240, easing: "cubic-bezier(.2,.7,.2,1)" };
+        current.animate?.([
+          { opacity: 0, transform: "translateY(100%)" },
           { opacity: 1, transform: "translateY(0)" },
-        ], { duration: 220, easing: "ease-out" });
+        ], options);
+        const exit = outgoing.animate?.([
+          { opacity: 1, transform: "translateY(0)" },
+          { opacity: 0, transform: "translateY(-100%)" },
+        ], options);
+        if (exit) exit.finished.then(() => outgoing.remove(), () => outgoing.remove());
+        else outgoing.remove();
       }
     }
     detailEl.hidden = !detail;
