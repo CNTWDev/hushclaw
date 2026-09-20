@@ -1,712 +1,253 @@
-/**
- * modules/calendar.js — Calendar panel UI
- *
- * State: calState holds all events + current view/month.
- * The panel supports Month grid view and Agenda (list) view.
- * Events are created/edited via a shared modal form.
- */
-
-import { send, calendarCfg } from "./state.js";
-import { openConfirm } from "./modal.js";
-import { t } from "./i18n.js";
-
-// ─── Internal state ───────────────────────────────────────────────────────────
-
-let _syncTimeoutId = null;   // module-scope so resetCalSyncUi() can clear it
-
-const calState = {
-  events: [],           // all loaded calendar_events from server
-  year: new Date().getFullYear(),
-  month: new Date().getMonth(), // 0-indexed
-  view: "month",        // "month" | "agenda"
-  editingId: null,      // event_id being edited, or null for new
-  selectedColor: "indigo",
+/** My itinerary: rendering only; native sources and interval math stay separate. */
+import { send, calendarCfg, state } from './state.js';
+import { dayKey, shiftDay, wallInput, segments, layoutIntervals, gaps, conflictCount, clockLabel } from './calendar_math.js';
+import { eventDetails, eventEditor, closeEventEditor } from './calendar_forms.js';
+import { openCalendarSources, receiveNativeStatus, resetNativeRequests } from './calendar_sources.js';
+export const onNativeCalendarStatus = receiveNativeStatus;
+const $ = id => document.getElementById(id),
+  zone = () => calendarCfg.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+const today = () => dayKey(new Date().toISOString(), zone());
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;'
+})[c]);
+export const sourceKey = e => `${e.source || 'local'}:${e.remote_calendar || ''}`;
+const data = {
+  events: [],
+  date: today(),
+  view: 'day',
+  hidden: new Set(),
+  query: ''
 };
-
-// ─── Color map ────────────────────────────────────────────────────────────────
-
-const COLOR_HEX = {
-  indigo:  "#6366f1",
-  sky:     "#0ea5e9",
-  emerald: "#10b981",
-  amber:   "#f59e0b",
-  rose:    "#f43f5e",
-  violet:  "#8b5cf6",
-};
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function escHtml(s) {
-  return String(s ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-// ─── Timezone helpers ─────────────────────────────────────────────────────────
-
-/** Returns the effective display timezone (configured > browser fallback). */
-function _tz() {
-  return calendarCfg.timezone || undefined; // undefined = browser's local timezone
-}
-
-// Cached Intl.DateTimeFormat for isoToDateKey — re-created only on tz change.
-let _dtfTz = undefined;
-let _dtfFmt = null;
-function _getDateFmt() {
-  const tz = _tz();
-  if (tz !== _dtfTz) {
-    _dtfTz = tz;
-    _dtfFmt = new Intl.DateTimeFormat("sv-SE", tz ? { timeZone: tz } : {});
-  }
-  return _dtfFmt;
-}
-
-/**
- * Convert an ISO string to the "YYYY-MM-DD" date key in the effective timezone.
- * Uses sv-SE locale which produces ISO-format dates (YYYY-MM-DD).
- */
-function isoToDateKey(isoStr) {
-  if (!isoStr) return "";
+let serial = 0,
+  requestId = '',
+  syncTimer = null;
+try {
+  const p = JSON.parse(localStorage.getItem('hc-itinerary') || '{}');
+  if (['day', 'week', 'month', 'agenda'].includes(p.view)) data.view = p.view;
+  data.hidden = new Set(p.hidden || []);
+} catch {}
+function remember() {
   try {
-    const d = new Date(isoStr);
-    if (isNaN(d)) return isoStr.slice(0, 10);
-    return _getDateFmt().format(d);
-  } catch { return isoStr.slice(0, 10); }
+    localStorage.setItem('hc-itinerary', JSON.stringify({
+      view: data.view,
+      hidden: [...data.hidden]
+    }));
+  } catch {}
 }
-
-function formatDate(isoStr) {
-  if (!isoStr) return "";
-  const d = new Date(isoStr);
-  if (isNaN(d)) return isoStr;
-  const opts = { month: "short", day: "numeric", year: "numeric" };
-  const tz = _tz();
-  if (tz) opts.timeZone = tz;
-  return d.toLocaleDateString(undefined, opts);
+function visible() {
+  return data.events.filter(e => !data.hidden.has(sourceKey(e)) && (!data.query || `${e.title} ${e.location}`.toLowerCase().includes(data.query.toLowerCase())));
 }
-
-function formatTime(isoStr) {
-  if (!isoStr) return "";
-  const d = new Date(isoStr);
-  if (isNaN(d)) return "";
-  const opts = { hour: "2-digit", minute: "2-digit" };
-  const tz = _tz();
-  if (tz) opts.timeZone = tz;
-  return d.toLocaleTimeString(undefined, opts);
+function days() {
+  if (data.view === 'day') return [data.date];
+  if (data.view === 'week') {
+    const dow = new Date(data.date + 'T12:00Z').getUTCDay(),
+      first = shiftDay(data.date, -((dow + 6) % 7));
+    return Array.from({
+      length: 7
+    }, (_, i) => shiftDay(first, i));
+  }
+  if (data.view === 'agenda') return Array.from({
+    length: 30
+  }, (_, i) => shiftDay(data.date, i));
+  const first = data.date.slice(0, 7) + '-01',
+    dow = new Date(first + 'T12:00Z').getUTCDay();
+  return Array.from({
+    length: 42
+  }, (_, i) => shiftDay(first, i - (dow + 6) % 7));
 }
-
-/**
- * Convert an ISO UTC string to a value for <input type="datetime-local">,
- * displayed in the effective timezone.
- */
-function isoToLocalInput(isoStr) {
-  if (!isoStr) return "";
-  try {
-    const d = new Date(isoStr);
-    if (isNaN(d)) return "";
-    const tz = _tz();
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: tz,
-      year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", hour12: false,
-    }).formatToParts(d);
-    const get = type => (parts.find(p => p.type === type)?.value ?? "00");
-    const h = get("hour") === "24" ? "00" : get("hour"); // midnight edge case
-    return `${get("year")}-${get("month")}-${get("day")}T${h}:${get("minute")}`;
-  } catch { return ""; }
+function requestEvents() {
+  const d = days();
+  requestId = `calendar-${++serial}`;
+  send({
+    type: 'list_calendar_events',
+    request_id: requestId,
+    from_time: shiftDay(d[0], -1),
+    to_time: shiftDay(d.at(-1), 2)
+  });
 }
-
-/**
- * Convert a datetime-local value (wall-clock in the effective timezone) to
- * a UTC ISO-8601 string with Z suffix for storage.
- */
-function localInputToIso(localStr) {
-  if (!localStr) return "";
-  try {
-    const tz = _tz();
-    if (!tz) {
-      // No configured timezone: browser interprets datetime-local as local time
-      const d = new Date(localStr);
-      return isNaN(d) ? localStr : d.toISOString().slice(0, 19) + "Z";
+const displayDate = (key, options = {}) => new Date(key + 'T12:00:00').toLocaleDateString(undefined, {
+  month: 'short',
+  day: 'numeric',
+  ...options
+});
+const clock = iso => new Date(iso).toLocaleTimeString(undefined, {
+  timeZone: zone(),
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23'
+});
+const sourceName = e => ({
+  macos: '本机日历',
+  google: 'Google',
+  caldav: 'CalDAV',
+  local: 'HushClaw'
+})[e.source || 'local'] || e.source;
+function chip(e) {
+  return `<button class="it-event" data-event="${esc(e.event_id)}" data-source="${esc(e.source || 'local')}"><strong>${esc(e.title)}</strong><small>${e.all_day ? '全天' : esc(clock(e.start_time))}</small></button>`;
+}
+function navigate(date, view = data.view) {
+  data.date = date;
+  data.view = view;
+  remember();
+  render();
+  requestEvents();
+}
+function render() {
+  if (!$('cal-content')) return;
+  const events = visible(),
+    range = days(),
+    current = today();
+  $('cal-title').textContent = data.view === 'month' ? data.date.slice(0, 7) : data.view === 'day' ? displayDate(data.date, {
+    year: 'numeric',
+    weekday: 'short'
+  }) : `${displayDate(range[0])} – ${displayDate(range.at(-1))}`;
+  $('cal-timezone').textContent = zone();
+  $('cal-date-picker').value = data.date;
+  document.querySelectorAll('.cal-view-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.view === data.view);
+    b.setAttribute('aria-pressed', String(b.dataset.view === data.view));
+  });
+  const daily = segments(events, data.date, zone());
+  const next = events.filter(e => !e.all_day && Date.parse(e.end_time) > Date.now()).sort((a, b) => Date.parse(a.start_time) - Date.parse(b.start_time))[0];
+  const conflict = conflictCount(daily),
+    free = gaps(daily).sort((a, b) => b[1] - b[0] - (a[1] - a[0]))[0];
+  const nextText = next ? `${Date.parse(next.start_time) <= Date.now() ? '进行中' : '下一场'} · ${dayKey(next.start_time, zone()) !== current ? displayDate(dayKey(next.start_time, zone())) + ' ' : ''}${clock(next.start_time)} ${next.title}` : '';
+  const dayLabel = data.view === 'day' ? '' : displayDate(data.date) + ' · ';
+  $('cal-summary').innerHTML = `<span>${esc(dayLabel + `${daily.length} 项行程`)}</span>${conflict ? `<span class="it-warning">${conflict} 对行程时间重叠</span>` : ''}${free ? `<span class="it-muted">${clockLabel(free[0])}–${clockLabel(free[1])} 当前筛选中无行程</span>` : ''}${data.date === current && next ? `<span class="it-next" title="已加载来源中的下一场行程">${esc(nextText)}</span>` : ''}`;
+  const host = $('cal-content'),
+    scroll = host.scrollTop,
+    scope = data.view + data.date,
+    changed = host.dataset.scope !== scope;
+  host.dataset.scope = scope;
+  host.dataset.view = data.view;
+  if (data.view === 'month') month(host, range, events, current);else if (data.view === 'agenda') agenda(host, range, events, current);else timeline(host, range, events, current);
+  host.querySelectorAll('[data-event]').forEach(b => b.addEventListener('click', ev => {
+    ev.stopPropagation();
+    const e = data.events.find(e => e.event_id === b.dataset.event);
+    if (e) eventDetails(e, data.date, zone());
+  }));
+  host.scrollTop = changed && ['day', 'week'].includes(data.view) ? (data.date === current ? Math.max(0, Number(wallInput(new Date().toISOString(), zone()).slice(11, 13)) - 1) : 8) * 52 : scroll;
+}
+function timeline(host, range, events, current) {
+  let html = `<div class="it-time-layout" style="--it-days:${range.length}"><div class="it-time-head"><span></span>${range.map(d => `<button class="${d === current ? 'is-today' : ''}" data-date="${d}">${esc(displayDate(d, {
+    weekday: 'short'
+  }))}</button>`).join('')}</div><div class="it-allday"><span>全天</span>${range.map(d => `<div>${segments(events, d, zone()).filter(r => r.allDay).map(r => chip(r.event)).join('')}</div>`).join('')}</div><div class="it-time-grid"><div class="it-hours">${Array.from({
+    length: 24
+  }, (_, i) => `<span>${clockLabel(i * 60)}</span>`).join('')}</div>`;
+  for (const d of range) {
+    html += `<div class="it-day-column ${d === current ? 'is-today' : ''}">`;
+    for (let h = 0; h < 24; h++) html += `<button class="it-slot" data-new="${d}T${String(h).padStart(2, '0')}:00" aria-label="${d} ${h}:00 新建行程" style="top:${h * 52}px"></button>`;
+    for (const r of layoutIntervals(segments(events, d, zone()))) {
+      const label = `${r.event.title}，${clockLabel(r.start)}–${clockLabel(r.end)}${r.columns > 1 ? '，时间冲突' : ''}`;
+      html += `<button class="it-event it-timed" data-event="${esc(r.event.event_id)}" data-source="${esc(r.event.source || 'local')}" aria-label="${esc(label)}" title="${esc(label)}" style="top:${r.start / 60 * 52}px;height:${Math.max(22, (r.end - r.start) / 60 * 52 - 2)}px;left:calc(${r.column / r.columns * 100}% + 3px);width:calc(${100 / r.columns}% - 6px)"><strong>${r.continued ? '↳ ' : ''}${esc(r.event.title)}</strong><small>${clockLabel(r.start)}–${clockLabel(r.end)}${r.columns > 1 ? ' · 冲突' : ''}</small>${range.length === 1 && r.end - r.start >= 60 ? `<small>${esc(r.event.location || sourceName(r.event))}</small>` : ''}</button>`;
     }
-    // Treat localStr as wall-clock time in tz.
-    // Method: parse as UTC, compute tz offset at that moment, subtract.
-    const asUtc = new Date(localStr + "Z"); // interpret wall clock as UTC momentarily
-    if (isNaN(asUtc)) return localStr;
-    // Find what the tz shows for that UTC moment
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: tz,
-      year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", hour12: false,
-    }).formatToParts(asUtc);
-    const get = type => parseInt(parts.find(p => p.type === type)?.value ?? "0");
-    const shownMs = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"));
-    // tzOffsetMs = shownMs - asUtc.getTime()  (positive for UTC+ zones)
-    const tzOffsetMs = shownMs - asUtc.getTime();
-    const utcMs = asUtc.getTime() - tzOffsetMs;
-    return new Date(utcMs).toISOString().slice(0, 19) + "Z";
-  } catch { return localStr; }
-}
-
-function eventsOnDate(year, month, day) {
-  const targetKey = `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-  return calState.events.filter(e => isoToDateKey(e.start_time) === targetKey);
-}
-
-function monthTitle(year, month) {
-  return new Date(year, month, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
-}
-
-function eventNowProgress(event, nowMs) {
-  if (!event || event.all_day) return null;
-  const startMs = new Date(event.start_time).getTime();
-  const endMs = new Date(event.end_time).getTime();
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
-  if (nowMs < startMs || nowMs > endMs) return null;
-  return Math.max(0, Math.min(100, Math.round(((nowMs - startMs) / (endMs - startMs)) * 100)));
-}
-
-// ─── Month grid renderer ──────────────────────────────────────────────────────
-
-function renderMonthView() {
-  const grid = document.getElementById("cal-month-grid");
-  if (!grid) return;
-
-  const { year, month } = calState;
-  document.getElementById("cal-title").textContent = monthTitle(year, month);
-
-  const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const today = new Date();
-  const todayY = today.getFullYear(), todayM = today.getMonth(), todayD = today.getDate();
-  const now = new Date();
-
-  // Build date-index in ONE pass (O(n)) instead of 31× eventsOnDate (O(31n)).
-  const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
-  const byDate = new Map();
-  for (const e of calState.events) {
-    const key = isoToDateKey(e.start_time);
-    if (!key.startsWith(monthPrefix)) continue;
-    if (!byDate.has(key)) byDate.set(key, []);
-    byDate.get(key).push(e);
-  }
-
-  let html = "";
-  // Leading empty cells
-  for (let i = 0; i < firstDay; i++) {
-    html += `<div class="cal-day-cell cal-day-empty"></div>`;
-  }
-  // Day cells
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dayOfWeek = (firstDay + d - 1) % 7; // 0=Sun,6=Sat
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-    const isToday = todayY === year && todayM === month && todayD === d;
-    const isPast = new Date(year, month, d) < new Date(todayY, todayM, todayD);
-    const targetKey = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-    const evs = byDate.get(targetKey) || [];
-
-    const chipsHtml = evs.map(e => {
-      const hex = COLOR_HEX[e.color] || COLOR_HEX.indigo;
-      const timeStr = e.all_day ? "" : formatTime(e.start_time);
-      const timeHtml = timeStr ? `<span class="cal-chip-time">${escHtml(timeStr)}</span>` : "";
-      const progress = isToday ? eventNowProgress(e, now.getTime()) : null;
-      const liveClass = progress !== null ? " cal-chip-live" : "";
-      const progressHtml = progress !== null
-        ? `<span class="cal-chip-progress" style="--progress:${progress}%"></span>`
-        : "";
-      return `<div class="cal-event-chip${liveClass}" data-id="${escHtml(e.event_id)}" style="--chip-color:${hex}" title="${escHtml(e.title)}">${timeHtml}${escHtml(e.title)}${progressHtml}</div>`;
-    }).join("");
-
-    const progressHtml = isToday ? (() => {
-      const pct = Math.round((now.getHours() * 60 + now.getMinutes()) / 14.4); // 0–100
-      return `<div class="cal-day-today-bar" style="--progress:${pct}%"></div>`;
-    })() : "";
-
-    const classes = ["cal-day-cell",
-      isToday   ? "cal-today"      : "",
-      isPast    ? "cal-day-past"   : "",
-      isWeekend ? "cal-day-weekend": "",
-    ].filter(Boolean).join(" ");
-
-    html += `<div class="${classes}">
-      <span class="cal-day-num">${d}</span>
-      <div class="cal-day-chips">${chipsHtml}</div>
-      ${progressHtml}
-    </div>`;
-  }
-  grid.innerHTML = html;
-
-  // Attach click listeners to chips
-  grid.querySelectorAll(".cal-event-chip").forEach(chip => {
-    chip.addEventListener("click", e => {
-      e.stopPropagation();
-      openEditModal(chip.dataset.id);
-    });
-  });
-}
-
-// ─── Agenda view renderer ─────────────────────────────────────────────────────
-
-function renderAgendaView() {
-  const list = document.getElementById("cal-agenda-list");
-  if (!list) return;
-  document.getElementById("cal-title").textContent = monthTitle(calState.year, calState.month);
-
-  // Show events for the current month
-  const { year, month } = calState;
-  const monthPrefix = `${year}-${String(month+1).padStart(2,"0")}`;
-  const monthEvents = calState.events.filter(e => isoToDateKey(e.start_time).startsWith(monthPrefix));
-
-  if (!monthEvents.length) {
-    list.innerHTML = `<div class="cal-empty">No events this month.</div>`;
-    return;
-  }
-
-  const now = new Date();
-  const nowMs = now.getTime();
-  const todayKey = isoToDateKey(now.toISOString());
-
-  // Group by date (in configured timezone)
-  const byDate = {};
-  for (const e of monthEvents) {
-    const dateKey = isoToDateKey(e.start_time);
-    if (!byDate[dateKey]) byDate[dateKey] = [];
-    byDate[dateKey].push(e);
-  }
-
-  let html = "";
-  for (const dateKey of Object.keys(byDate).sort()) {
-    const isToday = dateKey === todayKey;
-    const label = new Date(dateKey + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-    const todayBadge = isToday ? `<span class="cal-today-badge">TODAY</span>` : "";
-    html += `<div class="cal-agenda-day">
-      <div class="cal-agenda-date${isToday ? " cal-today-date" : ""}">${escHtml(label)}${todayBadge}</div>`;
-
-    // Sort events by start_time within the day
-    const sorted = [...byDate[dateKey]].sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
-    let nowLineInserted = false;
-
-    for (const e of sorted) {
-      const endMs = e.all_day ? Infinity : new Date(e.end_time).getTime();
-      const startMs = e.all_day ? 0 : new Date(e.start_time).getTime();
-      const isPast = !e.all_day && endMs < nowMs;
-
-      // Insert now-line before the first upcoming event in today's group
-      if (isToday && !nowLineInserted && !e.all_day && startMs >= nowMs) {
-        nowLineInserted = true;
-        const timeLabel = now.toLocaleTimeString(undefined, {
-          hour: "2-digit", minute: "2-digit",
-          ...((_tz()) ? { timeZone: _tz() } : {}),
-        });
-        html += `<div class="cal-now-line">
-          <div class="cal-now-dot"></div>
-          <div class="cal-now-line-bar"></div>
-          <span class="cal-now-label">${escHtml(timeLabel)}</span>
-        </div>`;
-      }
-
-      const hex = COLOR_HEX[e.color] || COLOR_HEX.indigo;
-      const timeStr = e.all_day ? t("all_day") : formatTime(e.start_time);
-      html += `<div class="cal-agenda-event${isPast ? " cal-event-past" : ""}" data-id="${escHtml(e.event_id)}">
-        <span class="cal-agenda-dot" style="background:${hex}"></span>
-        <span class="cal-agenda-time">${escHtml(timeStr)}</span>
-        <span class="cal-agenda-title">${escHtml(e.title)}</span>
-        ${e.location ? `<span class="cal-agenda-loc">@ ${escHtml(e.location)}</span>` : ""}
-        <div class="cal-agenda-actions">
-          <button class="cal-edit-btn muted-btn small" data-id="${escHtml(e.event_id)}">Edit</button>
-          <button class="cal-del-btn muted-btn small" data-id="${escHtml(e.event_id)}">✕</button>
-        </div>
-      </div>`;
+    if (d === current) {
+      const text = wallInput(new Date().toISOString(), zone()).slice(11),
+        minute = Number(text.slice(0, 2)) * 60 + Number(text.slice(3));
+      html += `<div class="it-now" style="top:${minute / 60 * 52}px"><span>${text}</span></div>`;
     }
-
-    // If all of today's events are past (no upcoming found), append now-line at end
-    if (isToday && !nowLineInserted) {
-      const timeLabel = now.toLocaleTimeString(undefined, {
-        hour: "2-digit", minute: "2-digit",
-        ...((_tz()) ? { timeZone: _tz() } : {}),
-      });
-      html += `<div class="cal-now-line">
-        <div class="cal-now-dot"></div>
-        <div class="cal-now-line-bar"></div>
-        <span class="cal-now-label">${escHtml(timeLabel)}</span>
-      </div>`;
-    }
-
-    html += `</div>`;
+    html += '</div>';
   }
-  list.innerHTML = html;
-
-  list.querySelectorAll(".cal-edit-btn").forEach(btn => {
-    btn.addEventListener("click", () => openEditModal(btn.dataset.id));
-  });
-  list.querySelectorAll(".cal-del-btn").forEach(btn => {
-    btn.addEventListener("click", () => confirmDeleteEvent(btn.dataset.id));
-  });
-  list.querySelectorAll(".cal-agenda-event").forEach(row => {
-    row.addEventListener("click", e => {
-      if (!e.target.closest("button")) openEditModal(row.dataset.id);
-    });
-  });
-
-  // Auto-scroll now-line into view when showing current month
-  if (year === now.getFullYear() && month === now.getMonth()) {
-    setTimeout(() => list.querySelector(".cal-now-line")?.scrollIntoView({ block: "center", behavior: "smooth" }), 60);
+  host.innerHTML = html + '</div></div>';
+  host.querySelectorAll('[data-date]').forEach(b => b.addEventListener('click', () => navigate(b.dataset.date, 'day')));
+  host.querySelectorAll('[data-new]').forEach(b => b.addEventListener('click', () => eventEditor(null, data.date, zone(), b.dataset.new)));
+}
+function month(host, range, events, current) {
+  host.innerHTML = `<div class="it-month-head">${['一', '二', '三', '四', '五', '六', '日'].map(d => `<span>周${d}</span>`).join('')}</div><div class="it-month-grid">${range.map(d => {
+    const rows = segments(events, d, zone());
+    return `<section class="it-month-day ${d === current ? 'is-today' : ''} ${d.slice(0, 7) !== data.date.slice(0, 7) ? 'outside-month' : ''}"><button class="it-date" data-date="${d}">${Number(d.slice(8))}</button>${rows.slice(0, 3).map(r => chip(r.event)).join('')}${rows.length > 3 ? `<button class="it-more" data-date="${d}">还有 ${rows.length - 3} 项</button>` : ''}</section>`;
+  }).join('')}</div>`;
+  host.querySelectorAll('[data-date]').forEach(b => b.addEventListener('click', () => navigate(b.dataset.date, 'day')));
+}
+function agenda(host, range, events, current) {
+  let html = '';
+  for (const d of range) {
+    const rows = segments(events, d, zone());
+    if (!rows.length) continue;
+    html += `<section class="it-agenda-day"><h3>${esc(displayDate(d, {
+      weekday: 'short'
+    }))}${d === current ? ' · 今天' : ''}</h3>${rows.map(r => `<button class="it-agenda-event" data-event="${esc(r.event.event_id)}"><time>${r.allDay ? '全天' : clockLabel(r.start) + '–' + clockLabel(r.end)}</time><span><strong>${esc(r.event.title)}</strong><small>${esc(r.event.location || '未设置地点')} · ${esc(sourceName(r.event))}${r.event.source && r.event.source !== 'local' ? ' · 只读' : ''}${r.continued ? ' · 跨日行程' : ''}</small></span></button>`).join('')}</section>`;
   }
+  host.innerHTML = html || '<div class="it-empty"><strong>未来 30 天没有显示的行程</strong><p>可新建本地行程，或在「日历来源」中选择要展示的日历。</p></div>';
 }
-
-// ─── Render dispatcher ────────────────────────────────────────────────────────
-
-function renderCalendar() {
-  if (calState.view === "month") {
-    renderMonthView();
-  } else {
-    renderAgendaView();
-  }
+export function renderCalendarEvents(items, reply = {}) {
+  if (reply.request_id && reply.request_id !== requestId) return;
+  data.events = Array.isArray(items) ? items : [];
+  render();
 }
-
-// ─── Modal logic ──────────────────────────────────────────────────────────────
-
-function openNewModal() {
-  calState.editingId = null;
-  calState.selectedColor = "indigo";
-
-  const now = new Date();
-  const later = new Date(now.getTime() + 60 * 60 * 1000);
-
-  document.getElementById("cal-modal-title").textContent = t("new_event");
-  document.getElementById("cal-ev-title").value = "";
-  document.getElementById("cal-ev-allday").checked = false;
-  document.getElementById("cal-ev-start").value = isoToLocalInput(now.toISOString());
-  document.getElementById("cal-ev-end").value = isoToLocalInput(later.toISOString());
-  document.getElementById("cal-ev-location").value = "";
-  document.getElementById("cal-ev-desc").value = "";
-  document.getElementById("cal-modal-delete").classList.add("hidden");
-  syncColorSwatches("indigo");
-  document.getElementById("cal-modal").classList.remove("hidden");
-  document.getElementById("cal-ev-title").focus();
+function resetSyncButton() {
+  clearTimeout(syncTimer);
+  syncTimer = null;
+  if ($('cal-sync-btn')) $('cal-sync-btn').disabled = false;
 }
-
-function openEditModal(eventId) {
-  const ev = calState.events.find(e => e.event_id === eventId);
-  if (!ev) return;
-
-  calState.editingId = eventId;
-  calState.selectedColor = ev.color || "indigo";
-
-  document.getElementById("cal-modal-title").textContent = t("edit_event");
-  document.getElementById("cal-ev-title").value = ev.title || "";
-  document.getElementById("cal-ev-allday").checked = !!ev.all_day;
-  document.getElementById("cal-ev-start").value = isoToLocalInput(ev.start_time);
-  document.getElementById("cal-ev-end").value = isoToLocalInput(ev.end_time);
-  document.getElementById("cal-ev-location").value = ev.location || "";
-  document.getElementById("cal-ev-desc").value = ev.description || "";
-  document.getElementById("cal-modal-delete").classList.remove("hidden");
-  syncColorSwatches(calState.selectedColor);
-  document.getElementById("cal-modal").classList.remove("hidden");
-  document.getElementById("cal-ev-title").focus();
-}
-
-function closeModal() {
-  document.getElementById("cal-modal").classList.add("hidden");
-  calState.editingId = null;
-}
-
-function syncColorSwatches(color) {
-  document.querySelectorAll(".cal-color-swatch").forEach(s => {
-    s.classList.toggle("active", s.dataset.color === color);
-  });
-  calState.selectedColor = color;
-}
-
-function saveModal() {
-  const title = document.getElementById("cal-ev-title").value.trim();
-  if (!title) {
-    document.getElementById("cal-ev-title").focus();
-    return;
-  }
-  const allDay = document.getElementById("cal-ev-allday").checked;
-  const startRaw = document.getElementById("cal-ev-start").value;
-  const endRaw = document.getElementById("cal-ev-end").value;
-  const start_time = localInputToIso(startRaw);
-  const end_time = localInputToIso(endRaw);
-  if (!start_time || !end_time) {
-    alert("Please set start and end times.");
-    return;
-  }
-  const payload = {
-    title,
-    start_time,
-    end_time,
-    all_day: allDay,
-    location: document.getElementById("cal-ev-location").value.trim(),
-    description: document.getElementById("cal-ev-desc").value.trim(),
-    color: calState.selectedColor,
-  };
-
-  if (calState.editingId) {
-    send({ type: "update_calendar_event", event_id: calState.editingId, ...payload });
-  } else {
-    send({ type: "create_calendar_event", ...payload });
-  }
-  closeModal();
-}
-
-async function confirmDeleteEvent(eventId) {
-  const ev = calState.events.find(e => e.event_id === eventId);
-  const title = ev ? ev.title : eventId;
-  const ok = await openConfirm({
-    title: "Delete event",
-    message: `Delete "${title}"?`,
-    confirmText: "Delete",
-    cancelText: "Cancel",
-  });
-  if (ok) {
-    send({ type: "delete_calendar_event", event_id: eventId });
-    closeModal();
-  }
-}
-
-// ─── Public API (called by websocket.js) ──────────────────────────────────────
-
-// Guard: only attempt the silent auto-detect save once per session.
-let _tzAutoSaveDone = false;
-
-/**
- * Show a banner if the configured timezone differs from the browser's current
- * system timezone. Called after config_status is received.
- */
-export function checkCalendarTimezone() {
-  const configTz = calendarCfg.timezone;
-  const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const existing = document.getElementById("cal-tz-banner");
-  if (existing) existing.remove();
-
-  // First-time setup: no timezone configured yet — auto-detect and persist
-  // via a minimal save_config (no wizard UI side-effects, once per session).
-  if (!configTz) {
-    calendarCfg.timezone = browserTz;
-    if (!_tzAutoSaveDone) {
-      _tzAutoSaveDone = true;
-      send({
-        type: "save_config",
-        config: { calendar: { timezone: browserTz } },
-        save_client_id: `tz_autodetect_${Date.now()}`,
-      });
-    }
-    return;
-  }
-
-  if (configTz === browserTz) return;
-
-  const banner = document.createElement("div");
-  banner.id = "cal-tz-banner";
-  banner.className = "cal-tz-banner";
-  banner.innerHTML = `
-    <span class="cal-tz-banner-msg">
-      System timezone changed to <strong>${escHtml(browserTz)}</strong>
-      (configured: ${escHtml(configTz)}).
-    </span>
-    <button class="cal-tz-banner-update secondary small">Update</button>
-    <button class="cal-tz-banner-dismiss muted-btn small">Dismiss</button>
-  `;
-
-  const panel = document.getElementById("panel-calendar");
-  if (panel) panel.insertBefore(banner, panel.firstChild);
-
-  banner.querySelector(".cal-tz-banner-update").addEventListener("click", async () => {
-    calendarCfg.timezone = browserTz;
-    // saveSettings() reads calendarCfg; syncFormToState() skips the calendar
-    // block when the integrations form is not open, so our update is preserved.
-    const { saveSettings } = await import("./settings/save.js");
-    saveSettings();
-    banner.remove();
-  });
-  banner.querySelector(".cal-tz-banner-dismiss").addEventListener("click", () => banner.remove());
-}
-
-export function renderCalendarEvents(items) {
-  calState.events = Array.isArray(items) ? items : [];
-  renderCalendar();
-}
-
-/** Called on WebSocket disconnect — immediately re-enables sync buttons. */
 export function resetCalSyncUi() {
-  if (_syncTimeoutId !== null) {
-    clearTimeout(_syncTimeoutId);
-    _syncTimeoutId = null;
-  }
-  const btn = document.getElementById("cal-sync-btn");
-  const resyncBtn = document.getElementById("cal-resync-btn");
-  const status = document.getElementById("cal-sync-status");
-  if (btn) btn.disabled = false;
-  if (resyncBtn) resyncBtn.disabled = false;
-  if (status && (status.textContent === "Syncing…" || status.textContent === "Clearing & re-syncing…")) {
-    status.textContent = "Disconnected";
-  }
+  resetSyncButton();
+  resetNativeRequests();
 }
-
-export function onCalendarSyncDone(data) {
-  const { count = 0, last_sync = 0, items, error } = data;
-  if (Array.isArray(items)) {
-    calState.events = items;
-    renderCalendar();
-  }
-  const btn = document.getElementById("cal-sync-btn");
-  const resyncBtn = document.getElementById("cal-resync-btn");
-  const status = document.getElementById("cal-sync-status");
-  if (btn) btn.disabled = false;
-  if (resyncBtn) resyncBtn.disabled = false;
-  if (_syncTimeoutId !== null) { clearTimeout(_syncTimeoutId); _syncTimeoutId = null; }
-  if (status) {
-    if (error) {
-      status.textContent = `Sync error: ${error}`;
-    } else {
-      const ts = last_sync ? new Date(last_sync * 1000).toLocaleTimeString() : "";
-      status.textContent = ts ? `Synced ${ts} (${count})` : `Synced (${count})`;
-    }
-  }
+export function onCalendarSyncDone(reply) {
+  resetSyncButton();
+  if (Array.isArray(reply.items)) renderCalendarEvents(reply.items);
+  $('cal-sync-status').textContent = reply.error ? '部分来源刷新失败：' + reply.error : `已刷新 ${new Date().toLocaleTimeString()}`;
 }
-
 export function onCalendarEventCreated(item) {
   if (!item) return;
-  calState.events = calState.events.filter(e => e.event_id !== item.event_id);
-  calState.events.push(item);
-  calState.events.sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
-  renderCalendar();
+  closeEventEditor();
+  data.events = data.events.filter(e => e.event_id !== item.event_id);
+  data.events.push(item);
+  render();
 }
-
-export function onCalendarEventUpdated(item) {
-  if (!item) return;
-  const idx = calState.events.findIndex(e => e.event_id === item.event_id);
-  if (idx !== -1) calState.events[idx] = item;
-  else calState.events.push(item);
-  calState.events.sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
-  renderCalendar();
+export const onCalendarEventUpdated = onCalendarEventCreated;
+export function onCalendarEventDeleted(id) {
+  data.events = data.events.filter(e => e.event_id !== id);
+  render();
 }
-
-export function onCalendarEventDeleted(eventId) {
-  calState.events = calState.events.filter(e => e.event_id !== eventId);
-  renderCalendar();
+export function checkCalendarTimezone() {
+  render();
 }
-
-// ─── Init (called once from events.js) ───────────────────────────────────────
-
 export function initCalendar() {
-  // Toolbar: prev / next / today
-  document.getElementById("cal-prev")?.addEventListener("click", () => {
-    calState.month--;
-    if (calState.month < 0) { calState.month = 11; calState.year--; }
-    renderCalendar();
+  function step(n) {
+    if (data.view === 'month') {
+      const d = new Date(data.date.slice(0, 7) + '-01T12:00Z');
+      d.setUTCMonth(d.getUTCMonth() + n);
+      navigate(d.toISOString().slice(0, 10));
+    } else navigate(shiftDay(data.date, n * (data.view === 'week' ? 7 : data.view === 'agenda' ? 30 : 1)));
+  }
+  $('cal-prev')?.addEventListener('click', () => step(-1));
+  $('cal-next')?.addEventListener('click', () => step(1));
+  $('cal-today')?.addEventListener('click', () => navigate(today()));
+  document.querySelectorAll('.cal-view-btn').forEach(b => b.addEventListener('click', () => navigate(data.date, b.dataset.view)));
+  $('cal-date-picker')?.addEventListener('change', ev => {
+    if (ev.target.value) navigate(ev.target.value);
   });
-  document.getElementById("cal-next")?.addEventListener("click", () => {
-    calState.month++;
-    if (calState.month > 11) { calState.month = 0; calState.year++; }
-    renderCalendar();
+  $('cal-search')?.addEventListener('input', ev => {
+    data.query = ev.target.value;
+    render();
   });
-  document.getElementById("cal-today")?.addEventListener("click", () => {
-    const now = new Date();
-    calState.year = now.getFullYear();
-    calState.month = now.getMonth();
-    renderCalendar();
-  });
-
-  // View toggle
-  document.querySelectorAll(".cal-view-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      calState.view = btn.dataset.view;
-      document.querySelectorAll(".cal-view-btn").forEach(b => b.classList.toggle("active", b === btn));
-      document.getElementById("cal-month-view").classList.toggle("active", calState.view === "month");
-      document.getElementById("cal-agenda-view").classList.toggle("active", calState.view === "agenda");
-      renderCalendar();
+  $('cal-new-btn')?.addEventListener('click', () => eventEditor(null, data.date, zone()));
+  $('cal-sources-btn')?.addEventListener('click', () => openCalendarSources(data, () => {
+    remember();
+    render();
+  }));
+  $('cal-sync-btn')?.addEventListener('click', () => {
+    $('cal-sync-btn').disabled = true;
+    $('cal-sync-status').textContent = '正在刷新…';
+    syncTimer = setTimeout(() => {
+      resetSyncButton();
+      $('cal-sync-status').textContent = '刷新超时，保留上次数据';
+    }, 125000);
+    send({
+      type: 'force_sync_caldav'
     });
   });
-
-  // New event button
-  document.getElementById("cal-new-btn")?.addEventListener("click", openNewModal);
-
-  // CalDAV sync button
-  document.getElementById("cal-sync-btn")?.addEventListener("click", () => {
-    const btn = document.getElementById("cal-sync-btn");
-    const status = document.getElementById("cal-sync-status");
-    if (btn) btn.disabled = true;
-    if (status) status.textContent = "Syncing…";
-    // Client-side timeout: re-enable the button if no response within 45s
-    _syncTimeoutId = setTimeout(() => {
-      if (btn) btn.disabled = false;
-      if (status) status.textContent = "Sync timed out";
-      _syncTimeoutId = null;
-    }, 45_000);
-    send({ type: "force_sync_caldav" });
-  });
-
-  // Re-sync button: clear all CalDAV events then pull fresh
-  document.getElementById("cal-resync-btn")?.addEventListener("click", async () => {
-    const ok = await openConfirm({
-      title: "Full Re-sync",
-      message: "This will delete all CalDAV-sourced events and re-import from scratch. Locally-created events are not affected.",
-      confirmText: "Re-sync",
-      cancelText: "Cancel",
-    });
-    if (!ok) return;
-    const btn = document.getElementById("cal-resync-btn");
-    const syncBtn = document.getElementById("cal-sync-btn");
-    const status = document.getElementById("cal-sync-status");
-    if (btn) btn.disabled = true;
-    if (syncBtn) syncBtn.disabled = true;
-    if (status) status.textContent = "Clearing & re-syncing…";
-    _syncTimeoutId = setTimeout(() => {
-      if (btn) btn.disabled = false;
-      if (syncBtn) syncBtn.disabled = false;
-      if (status) status.textContent = "Re-sync timed out";
-      _syncTimeoutId = null;
-    }, 100_000);
-    send({ type: "full_resync_caldav" });
-  });
-
-  // Modal buttons
-  document.getElementById("cal-modal-cancel")?.addEventListener("click", closeModal);
-  document.getElementById("cal-modal-save")?.addEventListener("click", saveModal);
-  document.getElementById("cal-modal-delete")?.addEventListener("click", () => {
-    if (calState.editingId) confirmDeleteEvent(calState.editingId);
-  });
-
-  // Color swatches
-  document.querySelectorAll(".cal-color-swatch").forEach(swatch => {
-    swatch.addEventListener("click", () => syncColorSwatches(swatch.dataset.color));
-  });
-
-  // Close modal on backdrop click
-  document.getElementById("cal-modal")?.addEventListener("click", e => {
-    if (e.target === document.getElementById("cal-modal")) closeModal();
-  });
-
-  // Close modal on Escape
-  document.addEventListener("keydown", e => {
-    if (e.key === "Escape" && !document.getElementById("cal-modal").classList.contains("hidden")) {
-      closeModal();
-    }
-  });
-
-  // All-day toggle: disable time inputs when checked
-  document.getElementById("cal-ev-allday")?.addEventListener("change", e => {
-    const timeRow = document.querySelector(".cal-time-row");
-    if (timeRow) timeRow.classList.toggle("allday-mode", e.target.checked);
-  });
-
-  // Re-check timezone whenever the user returns to this tab (catches OS tz changes).
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) checkCalendarTimezone();
-  });
-
-  // Initial title render
-  document.getElementById("cal-title").textContent = monthTitle(calState.year, calState.month);
-
-  // Auto-refresh every minute to keep now-line and progress bar current
   setInterval(() => {
-    const now = new Date();
-    if (calState.year === now.getFullYear() && calState.month === now.getMonth()) {
-      renderCalendar();
+    if (!document.hidden && state.tab === 'calendar') {
+      render();
+      requestEvents();
     }
-  }, 60_000);
+  }, 60000);
+  render();
 }

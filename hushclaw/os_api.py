@@ -728,6 +728,13 @@ class AgentOSService:
             event_offset=event_offset,
         )
 
+    def message_feedback(self, message_id: str, session_id: str, *, update: dict | None = None) -> dict:
+        """Application boundary for explicit user evaluation; never runs tools or models."""
+        store = self.gateway.memory.message_feedback
+        if update is not None:
+            return store.save(message_id, session_id, update)
+        return store.list(message_id, session_id)
+
     def list_profile_facts(
         self,
         *,

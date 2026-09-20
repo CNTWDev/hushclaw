@@ -12,6 +12,8 @@ The latest upgrade makes personal memory **inspectable and correctable**, while 
 
 | Upgrade | What changes for you |
 |---|---|
+| **Reply ratings and viewpoint excerpts** | Rate a reply’s helpfulness, or select a fragment to mark inspiration, endorsement or disagreement. Save references separately from endorsed viewpoints/methods; edit conditions, revise or retract later. |
+| **Explicit memory admission** | Assistant text is never automatically treated as your own stance. Saved references remain unendorsed; personal learning requires matching user quotations. Relevant explicit feedback joins existing context retrieval without another model call. |
 | **Per-answer understanding** | A compact **本次理解** entry shows your question, explicitly expressed viewpoints, historical references, and matching answer excerpts. Counts describe evidence—not a fabricated “understands you” percentage. |
 | **Correctable personal context** | Confirm a useful record or stop referencing an inaccurate one through the shared confirmation dialog. Original conversations remain intact. |
 | **Continuous context and evolving viewpoints** | Short follow-ups borrow the preceding question for retrieval; opinion updates can reuse an existing topic and retain refinement/reversal history. Current instructions take precedence over older inferences. |
@@ -196,7 +198,20 @@ Counts cover the selected **personal-memory records**, not all session-history t
 
 ### Upgrade Notes
 
-Schema **10** is additive: it preserves existing conversations, notes, files and opinion histories. The encrypted database migrator creates a pre-upgrade backup. Restore the database backup together with the matching older code when rolling back; do not run old code against a newer schema.
+File links in chat now tolerate whitespace inside Markdown destinations. Plain `/files/…` paths are linked after Markdown parsing, so existing links, references and code examples are not rewritten into nested links and incorrectly marked `[blocked]`. URL safety checks remain enabled; existing stored replies benefit on reload without regenerating their files.
+
+Schema **12** is additive: it preserves existing conversations, notes, files, opinion histories and feedback, and adds a small calendar-source preferences table in the same database. The encrypted database migrator creates a pre-upgrade backup. Restore the database backup together with the matching older code when rolling back; do not run old code against a newer schema.
+
+### My itinerary — local-first calendar
+
+Calendar now opens as a compact **day timeline**, with week, month and 30-day agenda views. It shows the current time, overlapping events side by side, and time conflicts / the largest unscheduled working-hours gap in the current filter. These are calendar-derived hints, not claims about your actual availability. Local events use the shared detail/edit dialogs and deletion confirmation; imported events are read-only.
+
+On **macOS**, choose **日历来源 → 授权读取本机日历**, confirm the system permission, then select calendars and save. This reads calendars already visible in the Mac Calendar app, including synced accounts, without a separate Google OAuth connection. The service must run on that Mac: a remote Linux server cannot read your laptop's calendar. Google / CalDAV remain independent optional sources; hide duplicated sources if the same account is also synced by macOS.
+
+- A small, locally built **EventKit helper** performs read-only access outside the harness kernel. Apple calls the read permission “full access”; the helper has no event-write APIs. Installation builds it when Apple Command Line Tools are available but **never requests permission or enables import automatically**. If needed, install the tools with `xcode-select --install` and retry from Calendar sources.
+- Only selected calendars are imported: title, time, location and source; not event notes or attendees. The snapshot covers **90 days back / 275 days ahead**, refreshing every five minutes. A failed refresh keeps the previous snapshot. Pausing retains cached events; source filters can hide them. Permission can be revoked in macOS System Settings → Privacy & Security → Calendars.
+- Preferences and imported events use the existing database (encrypted when enabled). Merely viewing or syncing does **not** invoke an LLM. **准备这场行程** fills a chat draft only; you choose whether to send it. Calendar data explicitly requested through chat tools is governed by the normal model-provider privacy boundary.
+- Non-macOS installations keep local events and configured Google / CalDAV sources; no mandatory native dependency is added. Local-calendar access does not repair a misconfigured external OAuth broker.
 
 To check and repair old, missing or dimension-mismatched vector indexes after upgrading:
 
@@ -267,7 +282,7 @@ Summary failure, empty output or truncation keeps the original context; oversize
 inputs are processed in chunks rather than silently dropped. This can temporarily leave
 history above its soft budget when the summary provider is unavailable.
 
-Checkpoints were introduced in schema v9 and are retained in schema v10 (encrypted when database encryption
+Checkpoints were introduced in schema v9 and are retained in later schemas (encrypted when database encryption
 is enabled). The normal startup migration backs up an existing database before upgrading.
 Legacy `summary.md` files and original records are preserved, but unbounded legacy summaries
 are no longer used to replace conversation history. The next successful compaction creates
@@ -276,6 +291,17 @@ a verified checkpoint; the first long conversation after upgrading may therefore
 ---
 
 ## Browser UI
+
+### Reply evaluation and explicit viewpoint memory
+
+Use **评价 · 摘记** below an assistant reply, or select a passage for the compact excerpt toolbar. The shared dialog supports:
+
+- **Reply helpfulness:** 0–5 stars (0 clears the rating), optional reasons and comments. A high score does not endorse every claim or certify factual accuracy.
+- **Fragment feedback:** inspiring, endorsed or disputed; optional summary, rationale and applicability/exception conditions. Saving as a reference is not agreement. Saving as your viewpoint or method requires explicit endorsement.
+- **Scope and control:** current workspace by default, otherwise current session; cross-project use is opt-in. Revision-checked updates, withdrawal and restoration preserve history. Hidden, excluded, changed or purged sources stop contributing; purging the source also removes its feedback and revision copies.
+- **Action assessment:** “评估观点与行动价值” prepares a normal chat draft covering evidence, applicability, benefit, effort, risk and a minimal validation step. You review and send it; feedback itself never creates or authorizes a task.
+
+Architecture stays small: `WebUI → AgentOSService → MessageFeedbackStore → existing SQLite`. The existing personalization assembler reads relevant explicit records; AgentLoop, tools, providers and the background-job lifecycle are unchanged. Ratings are stored for review, not silently converted into model training or broad user preferences. Automatic extraction is still a fallible, unconfirmed inference, even with a matching user quotation. Excerpt anchoring accepts exact source text and simple Markdown emphasis/whitespace differences; complex rendered selections may require a shorter passage or original Markdown.
 
 The chat surface keeps the answer central: collapsible navigation/session list on the left, streaming conversation in the middle, and a compact **Files** panel on the right.
 

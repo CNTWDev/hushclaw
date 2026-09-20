@@ -8,12 +8,46 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from datetime import date, datetime
 
 log = logging.getLogger(__name__)
 
 
+def validate_event(data):
+    """Validate a complete local event before applying any mutation."""
+    if not isinstance(data.get('title'), str) or not data['title'].strip() or len(data['title']) > 500:
+        raise ValueError('行程名称不能为空，且不能超过 500 字。')
+    all_day = bool(data.get('all_day'))
+    try:
+        parse = date.fromisoformat if all_day else datetime.fromisoformat
+        start, end = parse(data['start_time']), parse(data['end_time'])
+        if end <= start or (not all_day and (start.tzinfo is None or end.tzinfo is None)):
+            raise ValueError()
+    except (TypeError, KeyError, ValueError):
+        raise ValueError('请选择有效的起止时间；结束时间必须晚于开始时间，定时行程须包含时区。') from None
+
+
 class CalendarMixin:
     """Mixin for HushClawServer: local calendar event WebSocket handlers."""
+
+    async def _handle_native_calendar(self, ws, data):
+        result = {'type':'native_calendar_status', 'request_id':str(data.get('request_id',''))[:100]}
+        service = getattr(self._connectors, '_native_calendar_sync', None)
+        if service is None:
+            await ws.send(json.dumps({**result, 'ok':True, 'supported':False, 'permission':'unsupported', 'enabled':False, 'calendars':[]}))
+            return
+        try:
+            action = data.get('type')
+            if action == 'configure_native_calendar':
+                status = await service.select(data.get('enabled'), data.get('calendar_ids'))
+            else:
+                status = await service.status(authorize=action == 'authorize_native_calendar')
+            await ws.send(json.dumps({**result, **status, 'ok':True}))
+            if action == 'configure_native_calendar':
+                await self._handle_list_calendar_events(ws, {})
+        except Exception as exc:
+            log.warning('Native calendar operation failed: %s', type(exc).__name__)
+            await ws.send(json.dumps({**result, 'ok':False, 'error':str(exc)}))
 
     async def _handle_list_calendar_events(self, ws, data: dict) -> None:
         from_time = data.get("from_time") or None
@@ -21,7 +55,7 @@ class CalendarMixin:
         items = self._gateway.memory.list_calendar_events(
             from_time=from_time, to_time=to_time
         )
-        await ws.send(json.dumps({"type": "calendar_events", "items": items}, default=str))
+        await ws.send(json.dumps({"type": "calendar_events", "items": items, "request_id":data.get('request_id','')}, default=str))
 
     async def _handle_create_calendar_event(self, ws, data: dict) -> None:
         mem = self._gateway.memory
@@ -34,6 +68,7 @@ class CalendarMixin:
         if not start_time or not end_time:
             await ws.send(json.dumps({"type": "error", "message": "start_time and end_time are required"}))
             return
+        validate_event(data)
         item = mem.add_calendar_event(
             title=title,
             start_time=start_time,
@@ -54,6 +89,9 @@ class CalendarMixin:
             return
         allowed = {"title", "start_time", "end_time", "description", "location", "color", "all_day", "attendees"}
         fields = {k: v for k, v in data.items() if k in allowed}
+        existing = mem.get_calendar_event(event_id)
+        if existing:
+            validate_event({**existing, **fields})
         item = mem.update_calendar_event(event_id, **fields)
         if item:
             await ws.send(json.dumps({"type": "calendar_event_updated", "item": item}, default=str))

@@ -53,10 +53,12 @@ function paint(card, receipt) {
   if (!receipt.evidence?.length) body.append(node('p', '这次没有选中合适的个人记忆，不会为了展示而强行关联。', 'understanding-note'));
   for (const evidence of receipt.evidence || []) {
     const item = node('section', '', 'understanding-evidence');
-    const labels = { preference: '偏好与习惯', viewpoint: '历史观点', memory: '历史记录' };
+    const labels = { preference: '偏好与习惯', viewpoint: '历史观点', memory: '历史记录', reference: '收藏参考' };
     item.append(node('div', `${labels[evidence.kind] || '参考'} · ${evidence.label}`, 'understanding-evidence-title'));
     item.append(node('p', evidence.text));
-    item.append(node('span', evidence.unavailable ? '来源已不可用' : evidence.verification === 'confirmed' ? '你已确认' : evidence.verification === 'rejected' ? '已停用 · 不再作为个人参考' : '历史归纳 · 未经你确认', 'understanding-note'));
+    item.append(node('span', evidence.unavailable ? '来源已不可用或评价已变更' : evidence.verification === 'confirmed' ? '你已确认' : evidence.verification === 'saved_reference' ? '你收藏的参考 · 不代表认可' : evidence.verification === 'rejected' ? '已停用 · 不再作为个人参考' : '历史归纳 · 未经你确认', 'understanding-note'));
+    if (evidence.conditions) item.append(node('p', `适用条件：${evidence.conditions}`));
+    if (evidence.reason) item.append(node('p', `你的理由：${evidence.reason}`));
     const link = analysis?.links?.find(l => l.id === evidence.id);
     if (link && !evidence.unavailable && evidence.verification !== 'rejected') {
       item.append(node('div', link.relation === 'changed' ? '回复中讨论了变化' : '回复中的对应内容', 'understanding-evidence-title'));
@@ -73,7 +75,7 @@ function paint(card, receipt) {
       if (change.type === 'new') continue;
       item.append(node('p', `观点记录：${change.text}${change.reason ? `；原因：${change.reason}` : ''}`, 'understanding-note'));
     }
-    if (!evidence.unavailable) {
+    if (!evidence.unavailable && !evidence.id.startsWith('feedback-')) {
       const actions = node('div', '', 'understanding-actions');
       for (const [label, verdict] of evidence.verification === 'rejected' ? [['恢复参考', 'unconfirmed']] : [['符合我', 'confirmed'], ['不准确', 'rejected']]) {
         const button = node('button', label);
@@ -87,6 +89,7 @@ function paint(card, receipt) {
       }
       item.append(actions);
     }
+    if (evidence.id.startsWith('feedback-')) item.append(node('p', '可在原回复的“评价 · 摘记”中修改或撤销。', 'understanding-note'));
     body.append(item);
   }
   for (const uncertainty of analysis?.uncertainties || []) body.append(node('p', `待确认：${uncertainty}`, 'understanding-note'));

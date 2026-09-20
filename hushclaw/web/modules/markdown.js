@@ -264,7 +264,7 @@ export function renderMarkdown(raw, options = {}) {
     return `${prefix}@@MATHINLINE_${i}@@`;
   });
 
-  s = s.replace(/\[([^\]\n]+)\]\(((?:https?:\/\/|\/files\/)[^\s)]+)\)/g, (_m, label, href) => {
+  s = s.replace(/\[([^\]\n]+)\]\(\s*((?:https?:\/\/|\/files\/)[^\s)]+)\s*\)/g, (_m, label, href) => {
     // Relative /files/ path — render as download link.
     if (href.startsWith("/files/")) {
       const hrefWithKey = resolveFileUrl(href, apiKey);

@@ -247,6 +247,16 @@ class LearningController:
         source = self.memory.resolve_message_ref(trace.source_message_id)
         return bool(source and not source.get('hidden') and not source.get('excluded'))
 
+    def _user_evidence(self, trace: TaskTrace, item: dict) -> bool:
+        """Admission gate: an assistant suggestion cannot supply user evidence."""
+        quote = item.get('user_quote')
+        if not isinstance(quote, str) or len(quote.strip()) < 4 or quote not in (trace.user_input or ''):
+            return False
+        if isinstance(self.memory, MemoryStore):
+            source = self.memory.resolve_message_ref(trace.source_message_id) if trace.source_message_id else None
+            return bool(source and source['role'] == 'user' and not source.get('hidden') and not source.get('excluded') and quote in source['content'])
+        return True
+
     async def _extract_profile_llm(self, trace: TaskTrace, model: str, *, strict=False) -> list[dict]:
         """Call cheap_model to extract structured user profile facts. Returns [] on failure."""
         user_input = (trace.user_input or "").strip()
@@ -276,12 +286,14 @@ class LearningController:
             for item in items:
                 if not isinstance(item, dict):
                     continue
+                if not self._user_evidence(trace, item):
+                    continue
                 cat = str(item.get("category") or "").strip()
                 key = str(item.get("key") or "").strip()
                 val = item.get("value")
                 conf = float(item.get("confidence") or 0.5)
                 if cat and key and isinstance(val, dict):
-                    valid.append({"category": cat, "key": key, "value": val, "confidence": min(1.0, max(0.0, conf))})
+                    valid.append({"category": cat, "key": key, "value": {**val, 'user_quote': item['user_quote'], 'endorsement': 'unconfirmed'}, "confidence": min(1.0, max(0.0, conf))})
             log.debug("llm profile extraction: %d facts model=%s", len(valid), model)
             return valid
         except Exception as e:
@@ -293,12 +305,11 @@ class LearningController:
     async def _extract_facts_llm(self, trace: TaskTrace, model: str, *, strict=False) -> None:
         """Call cheap_model to extract durable knowledge facts and save to memory store."""
         user_input = (trace.user_input or "").strip()
-        assistant_response = (trace.assistant_response or "").strip()
         if len(user_input) < 15:
             return
         prompt = AUTO_EXTRACT_USER_TEMPLATE.format(
             user_input=user_input[:4000],
-            assistant_response=assistant_response[:1000],
+            assistant_response='[Excluded: assistant output is not user evidence]',
         )
         try:
             resp = await self.provider.complete(
@@ -322,6 +333,8 @@ class LearningController:
             saved = 0
             for item in items:
                 if not isinstance(item, dict):
+                    continue
+                if not self._user_evidence(trace, item):
                     continue
                 body = str(item.get("body") or "").strip()
                 title = str(item.get("title") or "").strip()[:80]
@@ -360,7 +373,6 @@ class LearningController:
     async def _extract_opinions_llm(self, trace: TaskTrace, model: str, *, strict=False) -> None:
         """Call cheap_model to extract opinion-evolution events. No rule fallback."""
         user_input = (trace.user_input or "").strip()
-        assistant_response = (trace.assistant_response or "").strip()
         if len(user_input) < 15:
             return
         existing_threads = "[]"
@@ -385,7 +397,7 @@ class LearningController:
         prompt = OPINION_EXTRACTION_USER_TEMPLATE.format(
             existing_threads=existing_threads,
             user_input=user_input[:4000],
-            assistant_response=assistant_response[:1000],
+            assistant_response='[Excluded: assistant output is not user evidence]',
         )
         try:
             resp = await self.provider.complete(
@@ -410,6 +422,8 @@ class LearningController:
             valid_event_types = {"new", "reinforce", "refine", "contradict", "reverse", "generalize"}
             for item in items:
                 if not isinstance(item, dict):
+                    continue
+                if not self._user_evidence(trace, item):
                     continue
                 topic = str(item.get("topic") or "").strip()
                 stance_delta = str(item.get("stance_delta") or "").strip()

@@ -1,5 +1,6 @@
 """ConnectorsManager — lifecycle manager for all enabled connectors."""
 from __future__ import annotations
+import sys
 
 from hushclaw.connectors.base import Connector, log
 from hushclaw.config.schema import ConnectorsConfig
@@ -21,6 +22,10 @@ class ConnectorsManager:
         self._webhook_registry: dict = webhook_registry or {}
         self._caldav_sync = None
         self._google_calendar_sync = None
+        self._native_calendar_sync = None
+        if sys.platform == 'darwin' and memory_store is not None:
+            from hushclaw.connectors.native_calendar import NativeCalendarSyncService
+            self._native_calendar_sync = NativeCalendarSyncService(memory_store)
         self._build(config, gateway, self._webhook_registry)
         if calendar_config is not None and memory_store is not None:
             self._init_caldav_sync(calendar_config, memory_store)
@@ -103,6 +108,8 @@ class ConnectorsManager:
         self._google_calendar_sync = GoogleCalendarSyncService(config, memory_store, get_secret_store())
 
     async def start(self) -> None:
+        if self._native_calendar_sync is not None:
+            await self._native_calendar_sync.start()
         for connector in self._connectors.values():
             await connector.start()
         if self._caldav_sync is not None:
@@ -111,6 +118,8 @@ class ConnectorsManager:
             await self._google_calendar_sync.start()
 
     async def stop(self) -> None:
+        if self._native_calendar_sync is not None:
+            await self._native_calendar_sync.stop()
         if self._google_calendar_sync is not None:
             await self._google_calendar_sync.stop()
         if self._caldav_sync is not None:
@@ -123,8 +132,10 @@ class ConnectorsManager:
         return {name: c.connected for name, c in self._connectors.items()}
 
     async def force_caldav_sync(self) -> int:
-        """Refresh configured CalDAV and Google sources for the Calendar view."""
+        """Refresh configured remote and opt-in native calendar sources."""
         services = [service for service in (self._caldav_sync, self._google_calendar_sync) if service is not None]
+        if self._native_calendar_sync is not None and self._native_calendar_sync._ready_to_sync():
+            services.append(self._native_calendar_sync)
         if not services:
             log.warning("[connectors] force_caldav_sync called but CalDAV sync service is not initialised — check calendar.enabled and calendar.url in config")
             return 0
@@ -141,7 +152,7 @@ class ConnectorsManager:
     @property
     def caldav_last_sync(self) -> float:
         """Most recent successful calendar source sync (0 if never / disabled)."""
-        return max((service.last_sync for service in (self._caldav_sync, self._google_calendar_sync)
+        return max((service.last_sync for service in (self._caldav_sync, self._google_calendar_sync, self._native_calendar_sync)
                     if service is not None), default=0.0)
 
     async def reload(
@@ -157,6 +168,10 @@ class ConnectorsManager:
         log.info("[connectors] reloading connectors after config change")
         await self.stop()
         self._connectors.clear()
+        self._native_calendar_sync = None
+        if sys.platform == 'darwin' and memory_store is not None:
+            from hushclaw.connectors.native_calendar import NativeCalendarSyncService
+            self._native_calendar_sync = NativeCalendarSyncService(memory_store)
         self._caldav_sync = None
         self._google_calendar_sync = None
         self._build(config, gateway, webhook_registry or self._webhook_registry)

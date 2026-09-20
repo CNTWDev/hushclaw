@@ -81,7 +81,7 @@ test('installation does not auto-activate; activation finishes cache cleanup and
     },
     caches: {
       open: async () => ({ addAll: async () => { cached = true; } }),
-      keys: async () => ['hushclaw-v42', 'hushclaw-v43'],
+      keys: async () => ['hushclaw-v47', 'hushclaw-v48'],
       delete: async key => deleted.push(key),
     },
   });
@@ -94,6 +94,6 @@ test('installation does not auto-activate; activation finishes cache cleanup and
   assert.equal(skips, 1);
   handlers.activate({ waitUntil: promise => { pending = promise; } });
   await pending;
-  assert.deepEqual(deleted, ['hushclaw-v42']);
+  assert.deepEqual(deleted, ['hushclaw-v47']);
   assert.equal(claims, 1);
 });

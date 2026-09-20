@@ -570,7 +570,7 @@ class TestLearningController:
         async def _complete(*, system="", **_kwargs):
             if system == PROFILE_EXTRACTION_SYSTEM:
                 return LLMResponse(
-                    content='[{"category":"communication_style","key":"response_depth","value":{"value":"concise","summary":"User prefers concise answers."},"confidence":0.9}]',
+                    content='[{"category":"communication_style","key":"response_depth","value":{"value":"concise","summary":"User prefers concise answers."},"confidence":0.9,"user_quote":"Please keep answers concise."}]',
                     stop_reason="end_turn",
                 )
             if system == REFLECT_SYSTEM:

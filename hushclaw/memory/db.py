@@ -23,7 +23,7 @@ from hushclaw.memory.encryption import (
     get_sqlcipher_driver,
 )
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 12
 DB_NAME = "memory.db"
 DB_SIDE_CARS = (DB_NAME, f"{DB_NAME}-wal", f"{DB_NAME}-shm")
 APPLICATION_ID = 0x4853434C  # "HSCL"; identifies HushClaw-owned SQLite files.
@@ -1056,6 +1056,26 @@ _VERSIONED_MIGRATIONS += (
 )
 
 
+_VERSIONED_MIGRATIONS += (
+    SchemaMigration(version=11, name="explicit-message-feedback", statements=(
+        """CREATE TABLE IF NOT EXISTS message_feedback (
+            feedback_id TEXT PRIMARY KEY, message_id TEXT NOT NULL, session_id TEXT NOT NULL,
+            source_hash TEXT NOT NULL, quote TEXT NOT NULL DEFAULT '', start_offset INTEGER NOT NULL DEFAULT 0,
+            end_offset INTEGER NOT NULL DEFAULT 0, scope TEXT NOT NULL,
+            payload TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1,
+            active INTEGER NOT NULL DEFAULT 1, created INTEGER NOT NULL, updated INTEGER NOT NULL
+        )""",
+        "CREATE INDEX IF NOT EXISTS feedback_message ON message_feedback(session_id,message_id)",
+        "CREATE INDEX IF NOT EXISTS feedback_scope ON message_feedback(scope,active,updated)",
+        """CREATE TABLE IF NOT EXISTS message_feedback_events (
+            event_id INTEGER PRIMARY KEY AUTOINCREMENT, feedback_id TEXT NOT NULL,
+            revision INTEGER NOT NULL, payload TEXT NOT NULL, created INTEGER NOT NULL,
+            UNIQUE(feedback_id,revision)
+        )""",
+    )),
+)
+
+
 def rebuild_fts_trigram(conn: sqlite3.Connection) -> None:
     """Drop and recreate both FTS5 tables with trigram tokenizer, then re-index all rows."""
     conn.executescript("""
@@ -1159,6 +1179,13 @@ def _preflight_legacy_columns(conn: sqlite3.Connection) -> None:
     _add_column_if_missing(conn, "runs", "run_kind", "run_kind TEXT NOT NULL DEFAULT 'primary'")
     _add_column_if_missing(conn, "runs", "visibility", "visibility TEXT NOT NULL DEFAULT 'foreground'")
     _add_column_if_missing(conn, "uploaded_files", "rating", "rating INTEGER NOT NULL DEFAULT 0 CHECK(rating BETWEEN 0 AND 5)")
+
+
+_VERSIONED_MIGRATIONS += (
+    SchemaMigration(version=12, name="native-calendar-source", statements=(
+        "CREATE TABLE IF NOT EXISTS calendar_sources (source_id TEXT PRIMARY KEY, config_json TEXT NOT NULL DEFAULT '{}')",
+    )),
+)
 
 
 def _db_user_version(conn: sqlite3.Connection) -> int:

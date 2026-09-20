@@ -294,12 +294,13 @@ BELIEF_MODEL_CONSOLIDATION_SYSTEM: str = (
 )
 
 PROFILE_EXTRACTION_SYSTEM: str = (
+    "Include user_quote: an exact span of at least 4 characters from the USER message supporting each item. Without it, return no item. All extractions remain unconfirmed inferences, not explicit endorsements. "
     "Reuse existing category/key for the same preference. Preserve conditions and exceptions. "
     "A question, quotation or assistant suggestion is not an endorsed personal belief. "
     "A one-off instruction is not automatically a permanent preference.\n"
     "You are a user-modeling assistant. Extract structured profile facts from a single user message.\n"
     "Return a JSON array only — no prose, no markdown, no explanation.\n"
-    "Each item must have exactly these fields:\n"
+    "Each item must have these fields plus user_quote:\n"
     '  {"category": "...", "key": "...", "value": {"value": "...", "summary": "..."}, "confidence": 0.0}\n\n'
     "Allowed categories and what they capture:\n"
     "  communication_style — response depth, language, format, formality, directness\n"
@@ -324,6 +325,7 @@ PROFILE_EXTRACTION_USER_TEMPLATE: str = (
 )
 
 AUTO_EXTRACT_SYSTEM: str = (
+    "Use only user input. Include user_quote: a literal span of at least 4 characters supporting each item. Never promote an assistant suggestion into a user belief/decision. Questions, quotations, hypotheses and requests to evaluate an idea are not endorsements. "
     "You extract durable knowledge facts from a single AI assistant conversation turn.\n"
     "Return a JSON array only — no prose, no markdown.\n"
     "Each item: {\"body\": \"...\", \"title\": \"...\", \"note_type\": \"...\", \"tags\": []}\n\n"
@@ -349,6 +351,7 @@ AUTO_EXTRACT_USER_TEMPLATE: str = (
 )
 
 OPINION_EXTRACTION_SYSTEM: str = (
+    "Include user_quote: an exact span of at least 4 characters from the USER message. Do not extract from assistant text; without user evidence return no item. All extracted stances are unconfirmed until explicit user feedback. "
     "Include thread_id: use the supplied existing thread_id when the topic is equivalent despite different wording; "
     "otherwise use an empty string. Preserve applicable conditions, tradeoffs and explicit reasons. "
     "Do not infer unstated motives or treat questions/quoted third parties as the user's stance.\n"

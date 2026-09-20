@@ -168,7 +168,9 @@ function _openModal({
 
   const onOverlayClick = (ev) => {
     if (!closeOnBackdrop) return;
-    if (!card.contains(ev.target)) _closeCurrent();
+    // Body actions can replace their clicked node before this event bubbles.
+    // A detached target is not a click on the backdrop.
+    if (ev.target === overlay) _closeCurrent();
   };
 
   const onCloseClick = () => {

@@ -10,6 +10,7 @@ import { markdownSurfaceClass, setMarkdownContent, unmountMarkdown } from "../ma
 import { addMessageReference } from "../events/references.js";
 import { openConfirm } from "../modal.js";
 import { downloadBlob, saveMarkdownFile, markdownFilename } from "../download.js";
+import { attachMessageFeedback } from './feedback.js';
 
 const HTML2CANVAS_URL = "/html2canvas.min.js";
 const HTML2CANVAS_CDN = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
@@ -1122,6 +1123,7 @@ export function addCopyActions(msgEl, bubbleEl, contentEl, ts) {
   footer.appendChild(timeEl);
   footer.appendChild(toggleBtn);
   footer.appendChild(actionsHost);
+  attachMessageFeedback(msgEl, bubbleEl, footer);
   contentEl.appendChild(footer);
 }
 

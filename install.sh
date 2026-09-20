@@ -1810,6 +1810,13 @@ LOCAL_WEB_URL="http://127.0.0.1:${PORT}${WEB_PATH}"
 info "Personal WebUI on http://${BIND}:${PORT}${WEB_PATH}"
 echo ""
 
+# Optional, read-only EventKit helper. Building never asks for calendar permission.
+if [[ "$OS_NAME" == "macOS" ]] && /usr/bin/xcrun --find swiftc >/dev/null 2>&1; then
+  if ! "$INSTALL_DIR/venv/bin/python" -m hushclaw.connectors.native_calendar; then
+    warn "Optional local calendar helper was not built. You can retry from Calendar → Calendar sources; all other features remain available."
+  fi
+fi
+
 if ! "$INSTALL_DIR/venv/bin/hushclaw" doctor >/tmp/hushclaw-doctor.log 2>&1; then
   warn "hushclaw doctor reported issues before startup:"
   sed 's/^/  /' /tmp/hushclaw-doctor.log >&2 || true

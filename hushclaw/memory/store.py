@@ -39,6 +39,7 @@ from hushclaw.memory.tasks import (
 )
 from hushclaw.memory.user_profile import UserProfileStore
 from hushclaw.memory.personalization import PersonalizationStore, relevance
+from hushclaw.memory.message_feedback import MessageFeedbackStore
 from hushclaw.memory.fts import FTSSearch, _build_fts_query
 from hushclaw.memory.kinds import (
     RECALL_MEMORY_KINDS,
@@ -104,6 +105,7 @@ class MemoryStore:
             self._vec = VectorStore(self.conn, embed_provider, api_key, embed_model)
             self.user_profile = UserProfileStore(self.conn)
             self.personalization = PersonalizationStore(self)
+            self.message_feedback = MessageFeedbackStore(self)
 
             # Session recall cache: (session_id, query) → (result_str, timestamp)
             self._recall_cache: dict[tuple[str, str], tuple[str, float]] = {}
@@ -2755,6 +2757,7 @@ class MemoryStore:
             return {"notes": 0, "profile_facts": 0, "reflections": 0}
         notes = self.delete_notes_by_source_message(mid)
         self.personalization.forget_source(mid)
+        self.message_feedback.forget(mid=mid)
         profile_facts = self.user_profile.delete_facts_by_source_message(mid)
         reflections = self.delete_reflections_by_source_message(mid)
         return {
@@ -2986,6 +2989,7 @@ class MemoryStore:
 
     def delete_session(self, session_id: str) -> bool:
         """Delete all turns for a session from the DB and its summary file."""
+        self.message_feedback.forget(sid=session_id)
         self.conn.execute('DELETE FROM understanding_receipts WHERE session_id=?', (session_id,))
         self.conn.execute("DELETE FROM learning_jobs WHERE json_extract(payload, '$.trace.session_id')=?", (session_id,))
         self.conn.execute("DELETE FROM turns_fts WHERE session=?", (session_id,))
@@ -3774,6 +3778,14 @@ class MemoryStore:
         Call only after all remote pages have loaded successfully. An empty
         successful snapshot removes cancelled/deleted Google events too.
         """
+        return self.replace_calendar_source_events('google', events)
+
+    def replace_calendar_source_events(self, source: str, events: list[dict]) -> int:
+        """Replace one complete, validated source snapshot, never other calendars."""
+        if source not in {'google', 'macos'}:
+            raise ValueError('Unsupported calendar snapshot source')
+        if source == 'macos' and any(not e['event_id'].startswith(source + ':') for e in events):
+            raise ValueError('Calendar identity must belong to its source')
         from contextlib import closing
         from hushclaw.memory.encryption import connect_database
 
@@ -3782,7 +3794,7 @@ class MemoryStore:
             event["event_id"], event["title"], event.get("description", ""),
             event.get("location", ""), event["start_time"], event["end_time"],
             int(event.get("all_day", False)), "indigo",
-            json.dumps(event.get("attendees", []), ensure_ascii=False), "google",
+            json.dumps(event.get("attendees", []), ensure_ascii=False), source,
             event["remote_uid"], event["remote_calendar"], event.get("remote_etag", ""),
             now, now, now,
         ) for event in events]
@@ -3792,7 +3804,7 @@ class MemoryStore:
         with closing(conn), conn:
             conn.execute("PRAGMA busy_timeout=5000")
             conn.execute("BEGIN IMMEDIATE")
-            conn.execute("DELETE FROM calendar_events WHERE source='google'")
+            conn.execute("DELETE FROM calendar_events WHERE source=?", (source,))
             cur = conn.executemany(
                 """INSERT INTO calendar_events
                    (event_id, title, description, location, start_time, end_time,
@@ -4059,6 +4071,9 @@ class MemoryStore:
 
     def update_calendar_event(self, event_id: str, **fields) -> dict | None:
         import time as _time
+        current = self.get_calendar_event(event_id)
+        if current and current.get('source', 'local') != 'local':
+            raise ValueError('外部日程为只读，请在原日历中修改。')
         allowed = {"title", "description", "location", "start_time", "end_time", "all_day", "color", "attendees"}
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
@@ -4077,6 +4092,9 @@ class MemoryStore:
         return self.get_calendar_event(event_id)
 
     def delete_calendar_event(self, event_id: str) -> bool:
+        current = self.get_calendar_event(event_id)
+        if current and current.get('source', 'local') != 'local':
+            raise ValueError('外部日程为只读，请在原日历中删除。')
         cur = self.conn.execute("DELETE FROM calendar_events WHERE event_id=?", (event_id,))
         self.conn.commit()
         return cur.rowcount > 0

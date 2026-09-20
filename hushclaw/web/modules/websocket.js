@@ -19,6 +19,7 @@ import {
 import { refreshComposerAutocomplete } from "./events/autocomplete.js";
 import { toolActivityLabel, runtimeActivityLabel } from "./ui/ai-primitives.js";
 import { receiveUnderstanding } from "./chat/understanding.js";
+import { receiveMessageFeedback } from './chat/feedback.js';
 
 import {
   handleConfigStatus, handleConfigSaved, openWizard,
@@ -60,7 +61,7 @@ import {
 } from "./insights.js";
 import {
   renderCalendarEvents, onCalendarEventCreated, onCalendarEventUpdated, onCalendarEventDeleted,
-  onCalendarSyncDone, resetCalSyncUi,
+  onCalendarSyncDone, resetCalSyncUi, onNativeCalendarStatus,
 } from "./calendar.js";
 import {
   refreshChatStats, setAgentStats, setSessionStats, setSkillStats,
@@ -537,6 +538,9 @@ function markEventSessionRunning(data, mode = "thinking", resetTimer = false) {
 
 export function handleMessage(data) {
   switch (data.type) {
+    case 'message_feedback':
+      receiveMessageFeedback(data);
+      break;
     case 'understanding':
       receiveUnderstanding(data);
       break;
@@ -1307,7 +1311,10 @@ export function handleMessage(data) {
       handleTransssionQuotaResult(data);
       break;
     case "calendar_events":
-      renderCalendarEvents(data.items || []);
+      renderCalendarEvents(data.items || [], data);
+      break;
+    case "native_calendar_status":
+      onNativeCalendarStatus(data);
       break;
     case "calendar_event_created":
       onCalendarEventCreated(data.item);
@@ -1317,6 +1324,9 @@ export function handleMessage(data) {
       break;
     case "calendar_event_deleted":
       onCalendarEventDeleted(data.event_id);
+      break;
+    case "calendar_error":
+      import('./calendar_forms.js').then(m => m.onCalendarError(data));
       break;
     case "calendar_sync_done":
       onCalendarSyncDone(data);

@@ -1,11 +1,12 @@
 import React from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { createPortal } from "react-dom";
-import { Streamdown, type MathPlugin } from "streamdown";
+import { Streamdown, defaultRemarkPlugins, type MathPlugin } from "streamdown";
 import "streamdown/styles.css";
 import "./react-islands.css";
 import { resolveFileUrl } from "../modules/http.js";
 import { preprocessMarkdownForRendering } from "../shared/markdown-preprocess.js";
+import { remarkArtifactLinks } from "../shared/artifact-links.js";
 
 type MarkdownSurface = "chat" | "file" | "share" | "print" | "forum" | "tool" | string;
 
@@ -31,7 +32,7 @@ declare global {
 const roots = new WeakMap<Element, Root>();
 let loadedMathPlugin: MathPlugin | null = null;
 let mathPluginPromise: Promise<MathPlugin> | null = null;
-const FILES_PATH_PATTERN = /(^|[\s(])(\/files\/(?:artifacts\/[\w.-]+(?:\/[\w./-]+)?\/?|[\w.-]+)(?:\?[^\s<)]*)?)(?=$|[\s<)])/g;
+const markdownRemarkPlugins = [...Object.values(defaultRemarkPlugins), remarkArtifactLinks];
 const INLINE_FILE_EXTS = new Set([".html", ".htm", ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".mp4", ".mp3", ".webm", ".ogg", ".wav"]);
 
 function flattenNodeText(node: React.ReactNode): string {
@@ -155,15 +156,7 @@ function normalizeArtifactMarkdown(raw: string): string {
   } catch {
     // Not structured artifact JSON.
   }
-  const segments = text.split(/(```[\s\S]*?```)/g);
-  return segments.map((segment, index) => {
-    if (index % 2 === 1) return segment;
-    return segment.replace(FILES_PATH_PATTERN, (match, prefix: string, href: string, offset: number) => {
-      if (prefix === "(" && offset > 0 && segment[offset - 1] === "]") return match;
-      const label = artifactLabelFromHref(href);
-      return `${prefix}[${label}](${href})`;
-    });
-  }).join("");
+  return text;
 }
 
 function compactUrlLabel(href: string): string {
@@ -391,6 +384,7 @@ function MarkdownIsland({ raw = "", surface = "chat", streaming = false }: Markd
         isAnimating={false}
         mode={streaming ? "streaming" : "static"}
         normalizeHtmlIndentation
+        remarkPlugins={markdownRemarkPlugins}
         plugins={mathPlugin ? { math: mathPlugin } : undefined}
       >
         {renderRaw}

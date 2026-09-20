@@ -156,7 +156,6 @@
   <link rel="stylesheet" href="/styles/panels-logs.css">
   <link rel="stylesheet" href="/styles/settings.css">
   <link rel="stylesheet" href="/styles/modal.css">
-  <link rel="stylesheet" href="/styles/calendar.css">
   <link rel="stylesheet" href="/styles/responsive.css">
   <link rel="stylesheet" href="/styles/density-compact.css">
   <link rel="stylesheet" href="/styles/product-pages.css">
@@ -164,6 +163,7 @@
   <link rel="stylesheet" href="/styles/ui-foundations.css">
   <link rel="stylesheet" href="/styles/chat-product.css">
   <link rel="stylesheet" href="/styles/ai-primitives.css">
+  <link rel="stylesheet" href="/styles/calendar.css">
 </head>
 <body>
 
@@ -623,30 +623,31 @@
     <!-- Calendar panel -->
     <div id="panel-calendar" class="panel">
       <div class="cal-toolbar">
+        <h2 class="it-page-title">我的行程</h2>
         <div class="cal-nav">
-          <button id="cal-prev" class="muted-btn small" title="Previous month">‹</button>
+          <button id="cal-prev" class="muted-btn small" aria-label="上一个时间段">‹</button>
           <span id="cal-title" class="cal-month-title"></span>
-          <button id="cal-next" class="muted-btn small" title="Next month">›</button>
-          <button id="cal-today" class="muted-btn small" data-i18n="cal_today">Today</button>
+          <button id="cal-next" class="muted-btn small" aria-label="下一个时间段">›</button>
+          <button id="cal-today" class="muted-btn small">今天</button>
         </div>
-        <div class="cal-view-toggle">
-          <button class="cal-view-btn active" data-view="month" data-i18n="cal_month">Month</button>
-          <button class="cal-view-btn" data-view="agenda" data-i18n="cal_agenda">Agenda</button>
+        <div class="cal-view-toggle" role="group" aria-label="行程视图">
+          <button class="cal-view-btn active" data-view="day">日</button>
+          <button class="cal-view-btn" data-view="week">周</button>
+          <button class="cal-view-btn" data-view="month">月</button>
+          <button class="cal-view-btn" data-view="agenda">列表</button>
         </div>
-        <button id="cal-new-btn" class="secondary" data-i18n="new_event_btn">+ New Event</button>
-        <button id="cal-sync-btn" class="muted-btn small cal-sync-btn" title="Sync CalDAV events now" data-i18n="cal_sync">↻ Sync</button>
-        <button id="cal-resync-btn" class="muted-btn small" title="Clear all CalDAV events and re-import from scratch" data-i18n="cal_resync">⟳ Re-sync</button>
-        <span id="cal-sync-status" class="cal-sync-status"></span>
+        <button id="cal-new-btn" class="secondary">＋ 新建行程</button>
       </div>
-      <div id="cal-month-view" class="cal-view active">
-        <div class="cal-weekdays">
-          <span class="cal-wkday-label cal-wkday-weekend">Sun</span><span class="cal-wkday-label">Mon</span><span class="cal-wkday-label">Tue</span><span class="cal-wkday-label">Wed</span><span class="cal-wkday-label">Thu</span><span class="cal-wkday-label">Fri</span><span class="cal-wkday-label cal-wkday-weekend">Sat</span>
-        </div>
-        <div id="cal-month-grid" class="cal-month-grid"></div>
+      <div class="it-filterbar">
+        <input id="cal-date-picker" type="date" aria-label="跳转日期">
+        <input id="cal-search" type="search" placeholder="搜索行程或地点" aria-label="搜索行程或地点">
+        <button id="cal-sources-btn" class="muted-btn small">日历来源</button>
+        <button id="cal-sync-btn" class="muted-btn small">↻ 刷新</button>
+        <span id="cal-timezone" class="it-muted"></span>
+        <span id="cal-sync-status" class="cal-sync-status" role="status"></span>
       </div>
-      <div id="cal-agenda-view" class="cal-view">
-        <div id="cal-agenda-list" class="cal-agenda-list"></div>
-      </div>
+      <div id="cal-summary" class="it-summary" aria-live="polite"></div>
+      <div id="cal-content" class="it-content" aria-label="我的行程"></div>
     </div>
 
     <!-- Logs panel -->
@@ -678,47 +679,6 @@
     </div>
 
   </main>
-
-  <!-- ── Calendar Event Modal ──────────────────────────────────────────── -->
-  <div id="cal-modal" class="cal-modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Calendar Event">
-    <div class="cal-modal-box">
-      <h3 id="cal-modal-title" class="cal-modal-heading">New Event</h3>
-      <div class="cal-form-group">
-        <input id="cal-ev-title" type="text" placeholder="Event title *" data-i18n-ph="ev_title_ph" autocomplete="off">
-      </div>
-      <div class="cal-form-row">
-        <label class="cal-allday-label">
-          <input type="checkbox" id="cal-ev-allday"> <span data-i18n="all_day">All day</span>
-        </label>
-      </div>
-      <div class="cal-form-row cal-time-row">
-        <label><span data-i18n="ev_start">Start</span><input id="cal-ev-start" type="datetime-local"></label>
-        <label><span data-i18n="ev_end">End</span><input id="cal-ev-end" type="datetime-local"></label>
-      </div>
-      <div class="cal-form-group">
-        <input id="cal-ev-location" type="text" placeholder="Location" data-i18n-ph="ev_location_ph" autocomplete="off">
-      </div>
-      <div class="cal-form-group">
-        <textarea id="cal-ev-desc" placeholder="Description" data-i18n-ph="ev_desc_ph" rows="3"></textarea>
-      </div>
-      <div class="cal-color-picker">
-        <span class="cal-color-label" data-i18n="ev_color">Color:</span>
-        <button class="cal-color-swatch active" data-color="indigo" title="Indigo" style="--swatch:#6366f1"></button>
-        <button class="cal-color-swatch" data-color="sky" title="Sky" style="--swatch:#0ea5e9"></button>
-        <button class="cal-color-swatch" data-color="emerald" title="Emerald" style="--swatch:#10b981"></button>
-        <button class="cal-color-swatch" data-color="amber" title="Amber" style="--swatch:#f59e0b"></button>
-        <button class="cal-color-swatch" data-color="rose" title="Rose" style="--swatch:#f43f5e"></button>
-        <button class="cal-color-swatch" data-color="violet" title="Violet" style="--swatch:#8b5cf6"></button>
-      </div>
-      <div class="cal-modal-actions">
-        <button id="cal-modal-delete" class="danger hidden" data-i18n="delete">Delete</button>
-        <div class="cal-modal-actions-right">
-          <button id="cal-modal-cancel" class="secondary" data-i18n="cancel">Cancel</button>
-          <button id="cal-modal-save" data-i18n="save">Save</button>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <!-- ── Settings Modal ──────────────────────────────────────────────────── -->
   <div id="wizard-overlay" class="wizard-overlay hidden" role="dialog" aria-modal="true" aria-label="HushClaw Settings">

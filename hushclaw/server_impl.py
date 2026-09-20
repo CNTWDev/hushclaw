@@ -1325,6 +1325,22 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                     "error": str(exc),
                 }
             await ws.send(json.dumps(payload, default=str))
+        elif msg_type in {"get_message_feedback", "save_message_feedback"}:
+            from hushclaw.memory.message_feedback import FeedbackError
+            mid, sid = str(data.get('message_id') or ''), str(data.get('session_id') or '')
+            response = {'type': 'message_feedback', 'message_id': mid, 'session_id': sid,
+                        'request_id': str(data.get('request_id') or '')[:100], 'ok': False}
+            try:
+                update = data.get('feedback') if msg_type == 'save_message_feedback' else None
+                if msg_type == 'save_message_feedback' and not isinstance(update, dict):
+                    raise FeedbackError('无效的评价请求。')
+                response.update(self._os().message_feedback(mid, sid, update=update), ok=True)
+            except FeedbackError as exc:
+                response['error'] = str(exc)
+            except Exception as exc:
+                log.warning('message feedback unavailable: %s', type(exc).__name__)
+                response['error'] = '暂时无法保存或读取评价，请重试。'
+            await self._send_json(ws, response)
         elif msg_type in {"get_understanding", "understanding_feedback"}:
             memory = self._gateway.memory
             mid = str(data.get('message_id') or '')
@@ -1696,12 +1712,16 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             await self._handle_get_logs(ws, data)
         elif msg_type == "list_calendar_events":
             await self._handle_list_calendar_events(ws, data)
-        elif msg_type == "create_calendar_event":
-            await self._handle_create_calendar_event(ws, data)
-        elif msg_type == "update_calendar_event":
-            await self._handle_update_calendar_event(ws, data)
-        elif msg_type == "delete_calendar_event":
-            await self._handle_delete_calendar_event(ws, data)
+        elif msg_type in {"get_native_calendar_status", "authorize_native_calendar", "configure_native_calendar"}:
+            await self._handle_native_calendar(ws, data)
+        elif msg_type in {"create_calendar_event", "update_calendar_event", "delete_calendar_event"}:
+            handlers = {"create_calendar_event": self._handle_create_calendar_event,
+                        "update_calendar_event": self._handle_update_calendar_event,
+                        "delete_calendar_event": self._handle_delete_calendar_event}
+            try:
+                await handlers[msg_type](ws, data)
+            except (ValueError, TypeError) as exc:
+                await ws.send(json.dumps({"type": "calendar_error", "message": str(exc)}))
         elif msg_type == "force_sync_caldav":
             await self._handle_force_sync_caldav(ws, data)
         elif msg_type == "full_resync_caldav":
