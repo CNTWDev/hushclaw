@@ -29,6 +29,7 @@ class RuntimeServices:
         prompt_blocks: "PromptBlockRegistry | None" = None,
         projection_worker: ProjectionWorker | None = None,
         retention_executor: RetentionExecutor | None = None,
+        learning_controller=None,
     ) -> None:
         self._memory = memory
         self._config = config
@@ -36,6 +37,8 @@ class RuntimeServices:
         self._prompt_blocks = prompt_blocks
         self._projection_worker = projection_worker
         self._retention_executor = retention_executor
+        self._learning_controller = learning_controller
+        self._personal_worker = None
 
     @property
     def projection_worker(self) -> ProjectionWorker | None:
@@ -59,9 +62,17 @@ class RuntimeServices:
             self._context_engine = context_engine
         self._ensure_projection_worker()
         self._ensure_retention_executor()
+        if self._learning_controller is not None and hasattr(self._memory, 'personalization'):
+            from hushclaw.learning.personal_worker import PersonalLearningWorker
+            worker = getattr(self._memory, '_personal_worker', None)
+            if worker is None:
+                worker = PersonalLearningWorker(self._memory, self._learning_controller)
+                self._memory._personal_worker = worker
+            self._personal_worker = worker
+            worker.start()
 
     async def stop(self) -> None:
-        for worker in (self._projection_worker, self._retention_executor):
+        for worker in (self._projection_worker, self._retention_executor, self._personal_worker):
             if worker is None:
                 continue
             await worker.stop()

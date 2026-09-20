@@ -23,7 +23,7 @@ from hushclaw.memory.encryption import (
     get_sqlcipher_driver,
 )
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 DB_NAME = "memory.db"
 DB_SIDE_CARS = (DB_NAME, f"{DB_NAME}-wal", f"{DB_NAME}-shm")
 APPLICATION_ID = 0x4853434C  # "HSCL"; identifies HushClaw-owned SQLite files.
@@ -1032,6 +1032,27 @@ _VERSIONED_MIGRATIONS = (
             )""",
         ),
     ),
+)
+
+
+_VERSIONED_MIGRATIONS += (
+    SchemaMigration(version=10, name="evidence-based-personalization", statements=(
+        """CREATE TABLE IF NOT EXISTS understanding_receipts (
+            message_id TEXT PRIMARY KEY, session_id TEXT NOT NULL,
+            user_message_id TEXT NOT NULL DEFAULT '', payload TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0,
+            next_attempt INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL
+        )""",
+        "CREATE INDEX IF NOT EXISTS understanding_session ON understanding_receipts(session_id, created)",
+        """CREATE TABLE IF NOT EXISTS memory_feedback (
+            evidence_id TEXT PRIMARY KEY, verdict TEXT NOT NULL,
+            updated INTEGER NOT NULL
+        )""",
+        """CREATE TABLE IF NOT EXISTS learning_jobs (
+            job_id TEXT PRIMARY KEY, payload TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
+            attempts INTEGER NOT NULL DEFAULT 0, next_attempt INTEGER NOT NULL DEFAULT 0
+        )""",
+    )),
 )
 
 

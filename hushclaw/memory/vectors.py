@@ -1,7 +1,7 @@
 """Vector embedding storage and cosine similarity search.
 
 Backends (in descending preference):
-  1. local  — TF-IDF style sparse embedding, pure stdlib (default)
+  1. local  — hashed term-frequency embedding, pure stdlib (default)
   2. ollama — nomic-embed-text via local HTTP
   3. openai — OpenAI embeddings API (urllib)
   4. None   — falls back to FTS-only
@@ -9,6 +9,8 @@ Backends (in descending preference):
 from __future__ import annotations
 
 import json
+import hashlib
+import time
 import logging
 import math
 import re
@@ -23,22 +25,25 @@ _log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Local TF-IDF embedding (no external deps)
+# Local hashed term-frequency embedding (no external deps)
 # ---------------------------------------------------------------------------
 
 def _tokenize(text: str) -> list[str]:
-    return re.findall(r"[a-zA-Z\u4e00-\u9fff]+", text.lower())
+    words = re.findall(r"[a-z0-9]+", text.lower())
+    for run in re.findall(r"[\u4e00-\u9fff]+", text):
+        words.extend(run[i:i + 2] for i in range(max(1, len(run) - 1)))
+    return words
 
 
 def _local_embed(text: str, dim: int = 512) -> list[float]:
-    """Deterministic hashed TF-IDF style embedding."""
+    """Deterministic hashed term-frequency embedding."""
     tokens = _tokenize(text)
     if not tokens:
         return [0.0] * dim
     tf = Counter(tokens)
     vec = [0.0] * dim
     for token, count in tf.items():
-        h = hash(token) % dim
+        h = int.from_bytes(hashlib.blake2s(token.encode(), digest_size=8).digest(), "little") % dim
         # Use multiple hashes to spread signal
         for seed in range(4):
             idx = (h + seed * 97) % dim
@@ -123,20 +128,29 @@ class VectorStore:
         # Composite key stored in the model column: "provider:model_or_default"
         _model_tag = embed_model or "default"
         self._model_key = f"{embed_provider}:{_model_tag}"
+        if embed_provider == "local":
+            self._model_key += ":stable-v2"
+        self._query_cache = {}
 
     def _embed(self, text: str) -> list[float] | None:
+        # Very large imported notes can exceed an embedding model's context.
+        # Keep a bounded head/tail representation; FTS still indexes the full body.
+        if self.embed_provider in {'ollama', 'openai'} and len(text) > 4000:
+            text = text[:3000] + '\n…\n' + text[-997:]
         if self.embed_provider == "ollama":
             model = self.embed_model or "nomic-embed-text"
             vec = _ollama_embed(text, model=model)
             if vec:
                 return vec
-            _log.warning("[hushclaw] ollama embed failed (model=%s), falling back to local", model)
+            _log.warning("ollama embedding unavailable (model=%s); using keyword retrieval only", model)
+            return None
         if self.embed_provider == "openai":
-            vec = _openai_embed(text, self.api_key)
+            vec = _openai_embed(text, self.api_key, self.embed_model or "text-embedding-3-small")
             if vec:
                 return vec
-            _log.warning("[hushclaw] openai embed failed, falling back to local")
-        if self.embed_provider in ("local", "ollama", "openai"):
+            _log.warning("embedding unavailable; using keyword retrieval only")
+            return None
+        if self.embed_provider == "local":
             return _local_embed(text)
         return None
 
@@ -160,9 +174,13 @@ class VectorStore:
         exclude_tags: list[str] | None = None,
     ) -> list[dict]:
         """Return notes ranked by cosine similarity to query embedding."""
-        q_vec = self._embed(query)
+        cached = self._query_cache.get(query)
+        q_vec = cached[1] if cached and time.monotonic() - cached[0] < 60 else self._embed(query)
         if q_vec is None:
             return []
+        if len(self._query_cache) >= 64:
+            self._query_cache.clear()
+        self._query_cache[query] = (time.monotonic(), q_vec)
 
         extra_clause = ""
         extra_params: tuple = (self._model_key,)

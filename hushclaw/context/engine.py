@@ -112,6 +112,9 @@ class DefaultContextEngine(ContextEngine):
     def context_trace(self) -> dict:
         return self._assembler.context_trace()
 
+    def personal_context(self) -> dict:
+        return self._assembler.personal_context
+
     def _read_file_cached(self, path: Path) -> str | None:
         """Read a workspace file, returning a cached copy if the file is unchanged."""
         key = str(path)

@@ -16,6 +16,23 @@
 
 #chat-area::before { display: none; }
 
+/* Personal context stays subordinate to the answer; no cards inside cards. */
+.understanding-card { margin-top: 8px; max-width: 100%; font-size: var(--ui-type-list, 12px); line-height: 1.55; }
+.understanding-card > summary { width: fit-content; cursor: pointer; color: var(--text-muted, #777); padding: 4px 0; }
+.understanding-card > summary:hover { color: var(--accent, #1683ec); }
+.understanding-body { margin-top: 8px; border-inline-start: 2px solid var(--border, #ddd); padding: 0 12px; max-width: 680px; overflow-wrap: anywhere; }
+.understanding-body h4 { font-size: inherit; font-weight: var(--ui-weight-strong); margin: 14px 0 4px; }
+.understanding-body p { margin: 4px 0 8px; white-space: pre-wrap; }
+.understanding-body blockquote { margin: 6px 0; padding: 4px 10px; border-inline-start: 2px solid var(--border, #ddd); white-space: pre-wrap; }
+.understanding-note { color: var(--text-muted, #777); font-size: 11px; }
+.understanding-evidence { padding: 10px 0; border-bottom: 1px solid var(--border, #eee); }
+.understanding-evidence-title { font-weight: var(--ui-weight-strong); margin-top: 6px; }
+.understanding-actions { display: flex; gap: 6px; margin-top: 6px; }
+.understanding-card button { font: inherit; min-height: 28px; padding: 3px 8px; border: 1px solid var(--border, #ddd); border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
+.understanding-card button:disabled { opacity: .5; cursor: default; }
+.understanding-card summary:focus-visible, .understanding-card button:focus-visible { outline: 2px solid var(--accent, #1683ec); outline-offset: 2px; }
+.understanding-source summary { cursor: pointer; margin-top: 6px; }
+
 /* Conversation header */
 .chat-stats-strip {
   min-height: var(--chat-chrome-height);

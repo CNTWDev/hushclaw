@@ -85,7 +85,7 @@ def test_database_upgrade_records_verified_migration_and_private_modes(tmp_path)
             (SCHEMA_VERSION,),
         ).fetchone()
         assert row is not None
-        assert row["name"] == "bounded-context-checkpoints"
+        assert row["name"] == "evidence-based-personalization"
         assert len(row["checksum"]) == 64
         assert store.conn.execute("PRAGMA application_id").fetchone()[0] == APPLICATION_ID
         assert store.conn.execute("PRAGMA secure_delete").fetchone()[0] == 2

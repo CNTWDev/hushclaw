@@ -56,7 +56,7 @@ class _RingBufferHandler(logging.Handler):
                 "message": record.getMessage(),
             }
             if record.exc_info:
-                item["exc"] = self.formatException(record.exc_info)
+                item["exc"] = logging.Formatter().formatException(record.exc_info)
             with _LOG_BUFFER_LOCK:
                 _LOG_BUFFER.append(item)
         except Exception:

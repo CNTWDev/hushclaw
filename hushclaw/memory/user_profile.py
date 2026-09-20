@@ -28,7 +28,7 @@ class UserProfileStore:
         """Insert or update one structured profile fact."""
         now = int(time.time())
         row = self.conn.execute(
-            "SELECT fact_id, confidence FROM user_profile_facts WHERE category=? AND key=?",
+            "SELECT fact_id, confidence, value_json FROM user_profile_facts WHERE category=? AND key=?",
             (category, key),
         ).fetchone()
         if row is None:
@@ -50,8 +50,11 @@ class UserProfileStore:
             )
         else:
             fact_id = str(row["fact_id"])
-            old_conf = float(row["confidence"] or 0.0)
-            new_conf = max(old_conf, max(0.0, min(1.0, float(confidence))))
+            if json.loads(row['value_json']) != value:
+                # Confirmation applies to the old wording, not future rewrites.
+                # A rejection stays in force until the user restores it.
+                self.conn.execute("DELETE FROM memory_feedback WHERE evidence_id=? AND verdict='confirmed'", ('profile:' + fact_id,))
+            new_conf = max(0.0, min(1.0, float(confidence)))
             self.conn.execute(
                 "UPDATE user_profile_facts SET value_json=?, confidence=?, source_session_id=?, source_message_id=?, updated=? "
                 "WHERE fact_id=?",

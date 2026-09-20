@@ -27,8 +27,43 @@ async function harness({ picker, clickError } = {}) {
   const module = new vm.SourceTextModule(await readFile(new URL('../hushclaw/web/modules/download.js', import.meta.url), 'utf8'), { context });
   await module.link(() => { throw new Error('unexpected dependency'); });
   await module.evaluate();
-  return { save: module.namespace.saveMarkdownFile, clicks, blobs, revoked, timers, warnings, anchor };
+  return { save: module.namespace.saveMarkdownFile, filename: module.namespace.markdownFilename, clicks, blobs, revoked, timers, warnings, anchor };
 }
+
+test('Markdown filename uses document topic, then session title, then question', async () => {
+  const h = await harness();
+  assert.equal(h.filename({markdown:'# **董事会会议框架**', sessionTitle:'产品讨论'}), '董事会会议框架.md');
+  assert.equal(h.filename({markdown:'## 核心结论\n正文', sessionTitle:'AI 产品设计原则'}), 'AI 产品设计原则.md');
+  assert.equal(h.filename({markdown:'# 总结', sessionTitle:'Session abc123', question:'请帮我分析一下数据库加密方案？'}), '数据库加密方案.md');
+  assert.equal(h.filename({markdown:'业务规划\n====\n正文'}), '业务规划.md');
+  assert.equal(h.filename({}), '对话记录.md');
+});
+
+test('Markdown filenames ignore code examples and strip unsafe formatting', async () => {
+  const h = await harness();
+  for (const markdown of ['```md\n# 示例标题\n```', '~~~md\n# 示例标题']) {
+    assert.equal(h.filename({markdown, sessionTitle:'真正的主题'}), '真正的主题.md');
+  }
+  assert.equal(h.filename({markdown:'# [产品](https://example.com) / 商业\\规划：V2?'}), '产品 商业 规划 V2.md');
+  assert.equal(h.filename({sessionTitle:'CON'}), '对话-CON.md');
+  assert.equal(h.filename({sessionTitle:'...报告.md'}), '报告.md');
+  assert.equal(h.filename({sessionTitle:'报告\u202e\u0000草稿'}), '报告 草稿.md');
+  const long = h.filename({sessionTitle:'观点演进'.repeat(30)});
+  assert.ok(Array.from(long.replace(/\.md$/, '')).length <= 40);
+});
+
+test('topic filename reaches both native save and browser fallback', async () => {
+  let suggested;
+  const h = await harness({picker: async options => {
+    suggested = options.suggestedName;
+    throw Object.assign(new Error('unsupported'), {name:'SecurityError'});
+  }});
+  const filename = h.filename({sessionTitle:'用户观点演化'});
+  await h.save(sample, filename);
+  assert.equal(suggested, '用户观点演化.md');
+  assert.equal(h.clicks[0].filename, suggested);
+  assert.equal(await h.blobs[0].text(), sample);
+});
 
 test('native save preserves Unicode and raw Markdown without duplicate download', async () => {
   let options, written, closed = false;
@@ -102,6 +137,9 @@ test('chat button uses the tested helper and catches document-building failures'
   const handler = source.slice(source.indexOf('mdBtn.addEventListener'), source.indexOf('const imgBtn ='));
   assert.ok(handler.indexOf('try {') < handler.indexOf('_buildShareMarkdown('));
   assert.match(handler, /await saveMarkdownFile\(text,/);
+  assert.match(handler, /markdownFilename\(/);
+  assert.match(handler, /sessionTitle: getCurrentSessionTitle\(\)/);
+  assert.doesNotMatch(handler, /hushclaw-\$\{|datePart|timePart/);
   assert.match(handler, /result !== "cancelled"/);
   assert.match(handler, /finally\s*\{\s*mdBtn.disabled = false/);
   assert.doesNotMatch(handler, /showSaveFilePicker|revokeObjectURL/);

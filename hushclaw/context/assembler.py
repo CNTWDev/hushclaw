@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Callable
 from hushclaw.context.policy import ContextPolicy
 from hushclaw.context.session_recall import SessionRecall, should_session_recall
 from hushclaw.context.trace import ContextTrace
+from hushclaw.memory.personalization import PersonalizationStore
 from hushclaw.prompt_blocks import (
     PromptAssembler,
     PromptBlock,
@@ -111,6 +112,7 @@ class ContextAssembler:
         self._profile_cache: tuple[str, float] | None = None
         self._ws_cache: dict[str, tuple[str | None, float]] = {}
         self._trace = ContextTrace()
+        self.personal_context = {}
 
     def context_trace(self) -> dict:
         return self._trace.summary()
@@ -305,9 +307,20 @@ class ContextAssembler:
             self._trace.add("user_notes", tier="dynamic", hit=False)
 
         recall_scopes = self._build_recall_scopes(config, workspace_dir_override, pipeline_run_id)
+        personal_store = getattr(memory, 'personalization', None)
+        if not isinstance(personal_store, PersonalizationStore):
+            personal_store = None
+        self.personal_context = {}
+        if personal_store is not None:
+            self.personal_context = personal_store.context(query, session_id or '', recall_scopes, max_tokens=policy.memory_max_tokens)
+            personal_text = personal_store.render(self.personal_context)
+            if personal_text:
+                dynamic_parts.append(personal_text)
+            self._trace.add('personal_context', tier='dynamic', content=personal_text,
+                            metadata={'evidence_count': len(self.personal_context.get('evidence', []))})
 
         profile_started = time.time()
-        profile_snapshot = self._load_profile_snapshot(memory)
+        profile_snapshot = '' if personal_store else self._load_profile_snapshot(memory)
         self._trace.add(
             "user_profile",
             tier="dynamic",
@@ -333,7 +346,7 @@ class ContextAssembler:
             elapsed_ms=(time.time() - belief_started) * 1000,
             metadata={"scopes": recall_scopes or [], "query_aware": bool(query), "max_models": 3},
         )
-        if belief_models_text:
+        if belief_models_text and not personal_store:
             dynamic_parts.append(f"{SECTION_BELIEF_MODELS}\n{belief_models_text}")
 
         working_state_started = time.time()
@@ -406,6 +419,8 @@ class ContextAssembler:
             has_working_state=bool(working_state),
             pipeline_run_id=pipeline_run_id,
         )
+        if personal_store is not None:
+            auto_recall = False  # selected personal context already includes hybrid note recall
 
         memories_text = ""
         if auto_recall:

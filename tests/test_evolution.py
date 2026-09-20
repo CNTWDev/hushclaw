@@ -243,8 +243,8 @@ class TestDefaultContextEngineAssemble:
                 session_id="s-current",
             )
         )
-        assert "Prior Session Recall" not in dynamic
-        memory.search_sessions.assert_not_called()
+        assert "Prior Session Recall" in dynamic
+        memory.search_sessions.assert_called_once()
 
     def test_session_recall_skips_short_operational_query_with_working_state(self):
         engine, memory, config = self._make_engine_and_deps()

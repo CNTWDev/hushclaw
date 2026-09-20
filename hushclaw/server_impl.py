@@ -1325,6 +1325,21 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                     "error": str(exc),
                 }
             await ws.send(json.dumps(payload, default=str))
+        elif msg_type in {"get_understanding", "understanding_feedback"}:
+            memory = self._gateway.memory
+            mid = str(data.get('message_id') or '')
+            sid = str(data.get('session_id') or '')
+            # Resolve the message through the normal transcript boundary first;
+            # hidden/purged messages must not leak through auxiliary receipts.
+            source = memory.resolve_message_ref(mid, session_id=sid) if sid else None
+            receipt = None
+            ok = bool(source and not source.get('hidden') and not source.get('excluded'))
+            if ok and msg_type == 'understanding_feedback':
+                ok = memory.personalization.set_feedback(mid, sid, str(data.get('evidence_id') or ''), str(data.get('verdict') or ''))
+            if ok:
+                receipt = memory.personalization.get_receipt(mid, sid)
+            await ws.send(json.dumps({'type': 'understanding', 'session_id': sid, 'message_id': mid,
+                                      'ok': ok, 'receipt': receipt}, ensure_ascii=False))
         elif msg_type == "list_opinion_threads":
             try:
                 os_svc = self._os()

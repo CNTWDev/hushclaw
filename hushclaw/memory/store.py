@@ -38,6 +38,7 @@ from hushclaw.memory.tasks import (
     TaskRunStore,
 )
 from hushclaw.memory.user_profile import UserProfileStore
+from hushclaw.memory.personalization import PersonalizationStore, relevance
 from hushclaw.memory.fts import FTSSearch, _build_fts_query
 from hushclaw.memory.kinds import (
     RECALL_MEMORY_KINDS,
@@ -45,7 +46,7 @@ from hushclaw.memory.kinds import (
     USER_VISIBLE_MEMORY_KINDS,
     infer_memory_kind,
 )
-from hushclaw.memory.vectors import VectorStore
+from hushclaw.memory.vectors import VectorStore, _tokenize
 from hushclaw.util.ids import make_id
 
 # FTS score threshold above which vector search is skipped (saves embed cost)
@@ -102,6 +103,7 @@ class MemoryStore:
             self._fts = FTSSearch(self.conn)
             self._vec = VectorStore(self.conn, embed_provider, api_key, embed_model)
             self.user_profile = UserProfileStore(self.conn)
+            self.personalization = PersonalizationStore(self)
 
             # Session recall cache: (session_id, query) → (result_str, timestamp)
             self._recall_cache: dict[tuple[str, str], tuple[str, float]] = {}
@@ -1071,7 +1073,7 @@ class MemoryStore:
                LIMIT 25""",
             (domain, scope),
         ).fetchall()
-        topic_terms = set(re.findall(r"[\w\u4e00-\u9fff]{2,}", topic_key))
+        topic_terms = set(_tokenize(topic_key))
         if not topic_terms:
             return None
         best_row = None
@@ -1082,7 +1084,7 @@ class MemoryStore:
             candidate_numbers = set(re.findall(r"\d+", candidate_key))
             if topic_numbers != candidate_numbers:
                 continue
-            candidate_terms = set(re.findall(r"[\w\u4e00-\u9fff]{2,}", candidate_key))
+            candidate_terms = set(_tokenize(candidate_key))
             if not candidate_terms:
                 continue
             overlap = len(topic_terms & candidate_terms)
@@ -1111,6 +1113,7 @@ class MemoryStore:
         stability_delta: float = 0.0,
         source_session_id: str = "",
         source_message_id: str = "",
+        thread_id: str = "",
     ) -> dict | None:
         topic_s = str(topic or "").strip()[:160]
         if not topic_s:
@@ -1135,8 +1138,11 @@ class MemoryStore:
         )
         topic_key = self._normalize_opinion_topic(topic_s)
         now = int(time.time())
-        thread = self._find_opinion_thread(topic_key=topic_key, domain=domain_s, scope=scope_s)
+        row = self.conn.execute('SELECT * FROM opinion_threads WHERE thread_id=? AND scope=?', (thread_id, scope_s)).fetchone() if thread_id else None
+        thread = self._opinion_row_payload(row) if row else self._find_opinion_thread(topic_key=topic_key, domain=domain_s, scope=scope_s)
         thread_id = str(thread.get("thread_id")) if thread else "opt-" + make_id()
+        if source_message_id and self.conn.execute('SELECT 1 FROM opinion_events WHERE thread_id=? AND source_message_id=?', (thread_id, source_message_id)).fetchone():
+            return self.get_opinion_thread(thread_id, event_limit=1)
 
         if thread is None:
             self.conn.execute(
@@ -1409,19 +1415,24 @@ class MemoryStore:
         limit: int = 5,
         include_kinds: set[str] | None = None,
         exclude_tags: list[str] | None = None,
+        scopes: list[str] | None = None,
     ) -> list[dict]:
         """Hybrid FTS + vector search, merged by score."""
         visible_kinds = include_kinds if include_kinds is not None else USER_VISIBLE_MEMORY_KINDS
         blocked_tags = list(dict.fromkeys((exclude_tags or []) + sorted(SYSTEM_MEMORY_TAGS)))
-        fts_results = {r["note_id"]: r for r in self._fts.search(query, limit * 2, exclude_tags=blocked_tags)}
-        vec_results = {r["note_id"]: r for r in self._vec.search(query, limit * 2, exclude_tags=blocked_tags)}
+        fts_results = {r["note_id"]: r for r in self._fts.search(query, limit * 2, scopes=scopes, exclude_tags=blocked_tags)}
+        vec_results = {r["note_id"]: r for r in self._vec.search(query, limit * 2, scopes=scopes, exclude_tags=blocked_tags)
+                       if r.get('score_vec', 0) >= (0.12 if self._vec.embed_provider == 'local' else 0.4)}
+        fts_rank = {key: rank + 1 for rank, key in enumerate(fts_results)}
+        vec_rank = {key: rank + 1 for rank, key in enumerate(vec_results)}
 
         all_ids = set(fts_results) | set(vec_results)
         merged = []
         for nid in all_ids:
             fts_score = fts_results.get(nid, {}).get("score_fts", 0.0)
             vec_score = vec_results.get(nid, {}).get("score_vec", 0.0)
-            combined = self.fts_weight * fts_score + self.vec_weight * vec_score
+            # Reciprocal rank fusion: BM25 and cosine have incompatible scales.
+            combined = ((self.fts_weight * 61 / (60 + fts_rank[nid])) if nid in fts_rank else 0) + ((self.vec_weight * 61 / (60 + vec_rank[nid])) if nid in vec_rank else 0)
             note = fts_results.get(nid) or vec_results.get(nid, {})
             merged.append({
                 "note_id": nid,
@@ -1433,7 +1444,10 @@ class MemoryStore:
 
         meta = self._fetch_note_metadata([r["note_id"] for r in merged])
         filtered = []
+        rejected = {r[0] for r in self.conn.execute("SELECT evidence_id FROM memory_feedback WHERE verdict='rejected'")}
         for r in merged:
+            if 'note:' + r['note_id'] in rejected:
+                continue
             _rc, note_type, memory_kind = meta.get(r["note_id"], (0, "fact", "project_knowledge"))
             if visible_kinds and memory_kind not in visible_kinds:
                 continue
@@ -1483,6 +1497,7 @@ class MemoryStore:
         """
         # Cache key includes creativity params and scopes so different modes don't collide
         cache_key = (session_id or "__global__", query, decay_rate, retrieval_temperature,
+                     min_score, max_tokens, limit,
                      tuple(sorted(scopes)) if scopes else None, max_age_days,
                      tuple(sorted(exclude_types)) if exclude_types else None,
                      tuple(sorted(include_kinds)) if include_kinds else None)
@@ -1538,10 +1553,14 @@ class MemoryStore:
 
         # Apply time-decay penalty and max_age_days filter
         if decay_rate > 0.0 or max_age_days > 0:
+            decay_meta = self._fetch_note_metadata([r['note_id'] for r in merged])
             now_ts = time.time()
             cutoff_ts = (now_ts - max_age_days * 86400.0) if max_age_days > 0 else 0.0
             kept = []
             for r in merged:
+                if decay_meta.get(r['note_id'], (0, '', ''))[1] in {'belief', 'preference', 'decision'}:
+                    kept.append(r)
+                    continue
                 created = r.get("created") or now_ts
                 if max_age_days > 0 and created < cutoff_ts:
                     continue  # too old — drop from recall pool
@@ -2735,6 +2754,7 @@ class MemoryStore:
         if not mid:
             return {"notes": 0, "profile_facts": 0, "reflections": 0}
         notes = self.delete_notes_by_source_message(mid)
+        self.personalization.forget_source(mid)
         profile_facts = self.user_profile.delete_facts_by_source_message(mid)
         reflections = self.delete_reflections_by_source_message(mid)
         return {
@@ -2966,6 +2986,8 @@ class MemoryStore:
 
     def delete_session(self, session_id: str) -> bool:
         """Delete all turns for a session from the DB and its summary file."""
+        self.conn.execute('DELETE FROM understanding_receipts WHERE session_id=?', (session_id,))
+        self.conn.execute("DELETE FROM learning_jobs WHERE json_extract(payload, '$.trace.session_id')=?", (session_id,))
         self.conn.execute("DELETE FROM turns_fts WHERE session=?", (session_id,))
         self.conn.execute("DELETE FROM turns WHERE session=?", (session_id,))
         self.conn.execute("DELETE FROM session_lineage WHERE session_id=?", (session_id,))

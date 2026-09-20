@@ -77,6 +77,7 @@ class Agent:
         self._runtime_services = RuntimeServices(
             self.memory,
             self.config,
+            learning_controller=self._learning,
             context_engine=self.context_engine,
             prompt_blocks=self.prompt_blocks,
         )

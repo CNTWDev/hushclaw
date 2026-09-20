@@ -294,6 +294,9 @@ BELIEF_MODEL_CONSOLIDATION_SYSTEM: str = (
 )
 
 PROFILE_EXTRACTION_SYSTEM: str = (
+    "Reuse existing category/key for the same preference. Preserve conditions and exceptions. "
+    "A question, quotation or assistant suggestion is not an endorsed personal belief. "
+    "A one-off instruction is not automatically a permanent preference.\n"
     "You are a user-modeling assistant. Extract structured profile facts from a single user message.\n"
     "Return a JSON array only — no prose, no markdown, no explanation.\n"
     "Each item must have exactly these fields:\n"
@@ -346,9 +349,12 @@ AUTO_EXTRACT_USER_TEMPLATE: str = (
 )
 
 OPINION_EXTRACTION_SYSTEM: str = (
+    "Include thread_id: use the supplied existing thread_id when the topic is equivalent despite different wording; "
+    "otherwise use an empty string. Preserve applicable conditions, tradeoffs and explicit reasons. "
+    "Do not infer unstated motives or treat questions/quoted third parties as the user's stance.\n"
     "You extract durable opinion-evolution events from one AI assistant conversation turn.\n"
     "Return a JSON array only — no prose, no markdown.\n"
-    "Each item must have exactly these fields:\n"
+    "Each item must have these fields, plus thread_id:\n"
     '  {"topic": "...", "domain": "general", "event_type": "new", "stance_delta": "...", '
     '"evidence": "...", "reason": "...", "confidence": 0.0, "stability_delta": 0.0}\n\n'
     "event_type must be one of: new | reinforce | refine | contradict | reverse | generalize\n"

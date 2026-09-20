@@ -5,11 +5,11 @@
  * no dependency on ../chat.js, so no circular imports.
  */
 
-import { showToast, escHtml, els, send, getCurrentSessionId } from "../state.js";
+import { showToast, escHtml, els, send, getCurrentSessionId, getCurrentSessionTitle } from "../state.js";
 import { markdownSurfaceClass, setMarkdownContent, unmountMarkdown } from "../markdown.js";
 import { addMessageReference } from "../events/references.js";
 import { openConfirm } from "../modal.js";
-import { downloadBlob, saveMarkdownFile } from "../download.js";
+import { downloadBlob, saveMarkdownFile, markdownFilename } from "../download.js";
 
 const HTML2CANVAS_URL = "/html2canvas.min.js";
 const HTML2CANVAS_CDN = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
@@ -936,10 +936,14 @@ function _buildMessageActionButtons(msgEl, bubbleEl) {
       const text = msgEl.dataset.role === "ai"
         ? _buildShareMarkdown(bubbleEl, msgEl)
         : _buildUserDownloadMarkdown(bubbleEl, msgEl);
-      const now = new Date();
-      const datePart = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
-      const timePart = `${String(now.getHours()).padStart(2,"0")}${String(now.getMinutes()).padStart(2,"0")}`;
-      const result = await saveMarkdownFile(text, `hushclaw-${datePart}-${timePart}.md`);
+      const questionBubble = msgEl.dataset.role === "ai"
+        ? _getPrevUserMsgEl(msgEl)?.querySelector('.bubble') : bubbleEl;
+      const filename = markdownFilename({
+        markdown: bubbleEl._raw ?? bubbleEl.innerText ?? '',
+        sessionTitle: getCurrentSessionTitle(),
+        question: questionBubble?._raw ?? questionBubble?.innerText ?? '',
+      });
+      const result = await saveMarkdownFile(text, filename);
       if (result !== "cancelled") {
         setCopyBtnTempText(mdBtn, result === "saved" ? "✓ Saved" : "✓ Download started", mdOrigHtml);
       }

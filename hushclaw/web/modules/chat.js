@@ -16,6 +16,7 @@ import {
   resetActiveRound, finalizeActiveRound, renderToolResult,
 } from "./chat/tools.js";
 import { addCopyActions } from "./chat/export.js";
+import { attachUnderstanding } from "./chat/understanding.js";
 import { AI_STATES, applyAiState, createAgentActivity, runtimeActivityLabel, thinkingActivityDetail } from "./ui/ai-primitives.js";
 import { followStreamTail } from "./chat/stream-tail.js";
 
@@ -828,7 +829,7 @@ function _refreshMessageActions(msgEl) {
   addCopyActions(msgEl, bubbleEl, contentEl, new Date());
 }
 
-export function applyLiveMessageIds({ userMessageId = "", assistantMessageId = "", clientTurnId = "" } = {}) {
+export function applyLiveMessageIds({ userMessageId = "", assistantMessageId = "", clientTurnId = "", understanding } = {}) {
   const turnId = String(clientTurnId || "").trim();
   const userMsgEl = (turnId && _userMsgElsByClientTurn.get(turnId)) || state._lastUserMsgEl;
   const aiMsgEl = (turnId && _aiMsgElsByClientTurn.get(turnId)) || state._aiMsgEl;
@@ -840,6 +841,7 @@ export function applyLiveMessageIds({ userMessageId = "", assistantMessageId = "
   if (assistantMessageId && aiMsgEl) {
     aiMsgEl.dataset.messageId = assistantMessageId;
     _refreshMessageActions(aiMsgEl);
+    attachUnderstanding(aiMsgEl, understanding);
   }
 }
 
@@ -1188,6 +1190,7 @@ function _renderOneTurn(t, parent = els.messages) {
       className: "bubble markdown-body",
     });
     addCopyActions(msgEl, bubbleEl, contentEl, ts);
+    attachUnderstanding(msgEl);
     parent.appendChild(msgEl);
   } else if (t.role === "tool") {
     const el = document.createElement("div");

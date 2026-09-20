@@ -18,6 +18,7 @@ import {
 } from "./chat.js";
 import { refreshComposerAutocomplete } from "./events/autocomplete.js";
 import { toolActivityLabel, runtimeActivityLabel } from "./ui/ai-primitives.js";
+import { receiveUnderstanding } from "./chat/understanding.js";
 
 import {
   handleConfigStatus, handleConfigSaved, openWizard,
@@ -536,6 +537,9 @@ function markEventSessionRunning(data, mode = "thinking", resetTimer = false) {
 
 export function handleMessage(data) {
   switch (data.type) {
+    case 'understanding':
+      receiveUnderstanding(data);
+      break;
     case "file_uploaded": {
       const resolve = state._uploadPending.get(data.upload_id);
       if (resolve) {
@@ -785,6 +789,7 @@ export function handleMessage(data) {
         userMessageId: data.user_message_id || "",
         assistantMessageId: data.assistant_message_id || "",
         clientTurnId: data.client_turn_id || "",
+        understanding: data.understanding,
       });
       debugUiLifecycle("session_done", { session_id: eventSessionId(data) || getCurrentSessionId(), tab: state.tab });
       finalizeAiMsgNow();

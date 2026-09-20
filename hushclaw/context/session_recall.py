@@ -21,7 +21,7 @@ def should_session_recall(query: str, *, has_working_state: bool, min_query_char
         return False
     # Without active working state, a compact session search helps recover
     # recent task continuity without relying on semantic long-term memory.
-    return not has_working_state and len(q) >= 24
+    return len(q) >= max(12, int(min_query_chars or 0))
 
 
 def _clip(text: str, max_chars: int) -> str:

@@ -1026,6 +1026,8 @@ class AgentLoop:
             has_images=bool(images),
         )
         _perf["assemble_ms"] = int((time.monotonic() - _t0) * 1000)
+        personal_context_fn = getattr(self.context_engine, 'personal_context', None)
+        personal_bundle = personal_context_fn() if callable(personal_context_fn) else {}
 
         log.info(
             "event_stream start: session=%s model=%s input=%r assemble=%.0fms",
@@ -1924,9 +1926,21 @@ class AgentLoop:
             round_num, tool_call_count, (time.monotonic() - _t0) * 1000, _agent_update_tool_calls,
             bool(_done_warnings),
         )
+        understanding = None
+        from hushclaw.memory.personalization import PersonalizationStore
+        if _assistant_event_id and isinstance(getattr(self.memory, 'personalization', None), PersonalizationStore):
+            try:
+                receipt_id = f'event:{_assistant_event_id}'
+                self.memory.personalization.save_receipt(receipt_id, self.session_id,
+                    f'event:{_user_event_id}' if _user_event_id else '',
+                    personal_bundle or {'question': user_input, 'evidence': []}, final_text)
+                understanding = self.memory.personalization.get_receipt(receipt_id, self.session_id)
+            except Exception as exc:
+                log.warning('personal context receipt unavailable: %s', type(exc).__name__)
         yield {
             "type": "done",
             "text": final_text,
+            "understanding": understanding,
             "input_tokens": _input_tokens,
             "output_tokens": _output_tokens,
             "stop_reason": _last_stop_reason,
