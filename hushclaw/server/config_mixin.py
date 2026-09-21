@@ -1,5 +1,5 @@
 """server/config_mixin.py — config status, apply, playwright check, list models,
-and thin delegators to provider/skill/transsion/update/config handlers.
+and thin delegators to skill/update/config handlers.
 
 Extracted from server_impl.py. All methods are accessed via self (mixin pattern).
 """
@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 
-from hushclaw.server import provider_handler, skill_handler, transsion_handler, config_handler, update_handler, integration_handler
+from hushclaw.server import skill_handler, config_handler, update_handler, integration_handler
 from hushclaw._build_info import BUILD_TIME as _BUILD_TIME
 from hushclaw.connections.view import build_connections_view
 from hushclaw.util.logging import get_logger
@@ -37,7 +37,6 @@ class ConfigMixin:
         cfg = self._gateway.base_agent.config
         provider = cfg.provider.name
         api_key = cfg.provider.api_key
-        needs_key = "ollama" not in provider
 
         from hushclaw.config.loader import get_config_dir, _load_toml
         cfg_file_path = get_config_dir() / "hushclaw.toml"
@@ -91,11 +90,13 @@ class ConfigMixin:
             "type": "config_status",
             "version":    self._update_service.current_version,
             "build_time": _BUILD_TIME,
-            "configured": (not needs_key) or api_key_saved,
+            "configured": bool(provider == "voxnexus" and cfg.provider.base_url and cfg.provider.voxauth_client_id and cfg.agent.model),
             "provider": provider,
             "model": cfg.agent.model,
             "base_url": cfg.provider.base_url or "",
             "provider_timeout": cfg.provider.timeout,
+            "voxnexus": {"issuer": cfg.provider.voxauth_issuer, "client_id": cfg.provider.voxauth_client_id,
+                         "gateway": (cfg.provider.base_url or "") if provider == "voxnexus" else ""},
             "public_base_url": cfg.server.public_base_url or "",
             "api_key_set": bool(api_key),
             "api_key_saved": api_key_saved,
@@ -369,13 +370,7 @@ class ConfigMixin:
                 }
                 for a in cfg.calendars
             ],
-            "transsion": {
-                "email":         cfg.transsion.email,
-                "display_name":  cfg.transsion.display_name,
-                "access_token":  cfg.transsion.access_token,
-                "authed":        bool(cfg.transsion.email and cfg.provider.api_key
-                                      and cfg.provider.name == "transsion"),
-            },
+
             "context": {
                 "history_budget":        cfg.context.history_budget,
                 "compact_threshold":     cfg.context.compact_threshold,
@@ -723,49 +718,6 @@ class ConfigMixin:
         except Exception as exc:
             log.error("Config reload error: %s", exc, exc_info=True)
 
-    # ── List models ────────────────────────────────────────────────────────────
-
-    async def _handle_list_models(self, ws, data: dict) -> None:
-        from hushclaw.config.schema import ProviderConfig
-        from hushclaw.providers.registry import get_provider
-        base_cfg = self._gateway.base_agent.config.provider
-        provider_name = data.get("provider") or base_cfg.name
-
-        # Transsion: model list lives on the control plane (bus-ie), not the AI
-        # Router (airouter).  Use the stored access_token to call the same
-        # /oneapi/api-credentials/info endpoint that acquire_credentials uses.
-        # Prefer the token from the WS message (set before Save) over the one
-        # in config (only available after Save).
-        if provider_name == "transsion":
-            import functools
-            from hushclaw.providers.transsion import get_models_from_credentials
-            access_token = (
-                data.get("access_token") or
-                self._gateway.base_agent.config.transsion.access_token
-            )
-            try:
-                models = await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    functools.partial(get_models_from_credentials, access_token),
-                )
-                await ws.send(json.dumps({"type": "models", "items": models}))
-            except Exception as e:
-                log.warning("transsion list_models from control plane failed: %s", e)
-                await ws.send(json.dumps({"type": "models", "items": [], "error": str(e)}))
-            return
-
-        cfg = ProviderConfig(
-            name=provider_name,
-            api_key=data.get("api_key") or base_cfg.api_key,
-            base_url=data.get("base_url") or base_cfg.base_url,
-        )
-        try:
-            provider = get_provider(cfg)
-            models = await provider.list_models()
-            await ws.send(json.dumps({"type": "models", "items": models}))
-        except Exception as e:
-            await ws.send(json.dumps({"type": "models", "items": [], "error": str(e)}))
-
     # ── Config / workspace handler delegators ──────────────────────────────────
 
     async def _handle_init_workspace(self, ws, data: dict) -> None:
@@ -781,17 +733,6 @@ class ConfigMixin:
 
     async def _handle_save_update_policy(self, ws, data: dict) -> None:
         await config_handler.handle_save_update_policy(ws, data, self._apply_config)
-
-    # ── Transsion / TEX AI Router auth delegators ─────────────────────────────
-
-    async def _handle_transsion_send_code(self, ws, data: dict) -> None:
-        await transsion_handler.handle_send_code(ws, data)
-
-    async def _handle_transsion_login(self, ws, data: dict) -> None:
-        await transsion_handler.handle_login(ws, data)
-
-    async def _handle_transsion_quota(self, ws, data: dict) -> None:
-        await transsion_handler.handle_quota(ws, data, self._gateway)
 
     # ── Update handler delegators ──────────────────────────────────────────────
 
@@ -812,9 +753,6 @@ class ConfigMixin:
         self._upgrade_in_progress = self._upgrade_state["in_progress"]
 
     # ── Provider / skill handler delegators ───────────────────────────────────
-
-    async def _handle_test_provider(self, ws, data: dict) -> None:
-        await provider_handler.handle_test_provider(ws, data, self._gateway)
 
     async def _handle_list_skills(self, ws, data: dict | None = None) -> None:
         await skill_handler.handle_list_skills(ws, self._gateway, data)

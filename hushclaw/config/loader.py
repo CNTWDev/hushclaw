@@ -80,6 +80,8 @@ def _apply_env(raw: dict) -> dict:
         "HUSHCLAW_PROVIDER": ("provider", "name"),
         "HUSHCLAW_API_KEY": ("provider", "api_key"),
         "HUSHCLAW_BASE_URL": ("provider", "base_url"),
+        "HUSHCLAW_VOXAUTH_CLIENT_ID": ("provider", "voxauth_client_id"),
+        "HUSHCLAW_VOXAUTH_ISSUER": ("provider", "voxauth_issuer"),
         "HUSHCLAW_PUBLIC_BASE_URL": ("server", "public_base_url"),
         "HUSHCLAW_DATA_DIR": ("memory", "data_dir"),
         "HUSHCLAW_LOG_LEVEL": ("logging", "level"),
@@ -113,7 +115,7 @@ def _apply_env(raw: dict) -> dict:
         elif isinstance(v, list):
             pass  # already a list (array-of-tables from TOML)
 
-    provider_name = raw.get("provider", {}).get("name", "anthropic-raw")
+    provider_name = raw.get("provider", {}).get("name", "voxnexus")
     # Provider-specific env keys (ANTHROPIC_API_KEY etc.) are convenience shortcuts
     # for users who have NOT configured an explicit api_key in their TOML.  When the
     # user has saved a key through the wizard (or hand-edited the TOML), that value
@@ -721,7 +723,7 @@ def validate_config(config: "Config") -> list[str]:
     warnings: list[str] = []
 
     # Provider API key
-    if "ollama" not in config.provider.name and not config.provider.api_key:
+    if config.provider.name not in ("ollama", "voxnexus") and not config.provider.api_key:
         n = config.provider.name.lower()
         if "gemini" in n or "google" in n:
             env_hint = "GEMINI_API_KEY"

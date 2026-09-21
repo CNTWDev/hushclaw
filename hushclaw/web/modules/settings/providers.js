@@ -6,119 +6,12 @@ import { escHtml } from "../state.js";
 
 // ── Provider definitions ───────────────────────────────────────────────────
 
-export const PROVIDERS = [
-  {
-    id: "anthropic-raw",
-    name: "Anthropic / Compatible",
-    desc: "Claude models via Anthropic API or any Anthropic-compatible proxy (e.g. AIGOCODE). Uses urllib — no extra deps.",
-    needsKey: true,
-    defaultModel: "claude-sonnet-4-6",
-    modelSuggestions: ["claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
-    keyLabel: "API Key",
-    keyPlaceholder: "sk-ant-api03-…",
-    keyHint: 'Anthropic: <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a> &nbsp;·&nbsp; AIGOCODE: use your AIGOCODE dashboard key',
-    defaultBaseUrl: "https://api.anthropic.com/v1",
-    baseUrlLabel: "Base URL — AIGOCODE proxy: https://api.aigocode.com/v1",
-  },
-  {
-    id: "openai-sdk",
-    name: "OpenAI / Compatible",
-    desc: "GPT-4o, OpenRouter, Groq, Together, or any OpenAI-compatible endpoint. Uses the official openai SDK.",
-    needsKey: true,
-    defaultModel: "gpt-4o",
-    modelSuggestions: ["gpt-4o", "gpt-4o-mini", "openai/gpt-4o", "anthropic/claude-sonnet-4-6", "google/gemini-pro"],
-    keyLabel: "API Key",
-    keyPlaceholder: "sk-…",
-    keyHint: 'OpenAI: <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com</a> &nbsp;·&nbsp; OpenRouter: <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>',
-    defaultBaseUrl: "https://api.openai.com/v1",
-    baseUrlLabel: "Base URL (OpenRouter: https://openrouter.ai/api/v1)",
-  },
-  {
-    id: "minimax",
-    name: "MiniMax",
-    desc: "MiniMax M2 series — OpenAI-compatible API. 204K context, fast & high-speed variants.",
-    needsKey: true,
-    defaultModel: "MiniMax-M2.7",
-    modelSuggestions: [
-      "MiniMax-M2.7", "MiniMax-M2.7-highspeed",
-      "MiniMax-M2.5", "MiniMax-M2.5-highspeed",
-      "MiniMax-M2.1", "MiniMax-M2.1-highspeed",
-      "MiniMax-M2",
-    ],
-    keyLabel: "API Key",
-    keyPlaceholder: "eyJ…",
-    keyHint: 'Get your key from <a href="https://platform.minimax.io" target="_blank" rel="noopener">platform.minimax.io</a> (global) or <a href="https://platform.minimaxi.com" target="_blank" rel="noopener">platform.minimaxi.com</a> (China)',
-    defaultBaseUrl: "https://api.minimax.io/v1",
-    baseUrlLabel: "Base URL",
-    regions: [
-      { label: "🌏 China",  url: "https://api.minimaxi.com/v1" },
-      { label: "🌍 Global", url: "https://api.minimax.io/v1"  },
-    ],
-  },
-  {
-    id: "gemini",
-    name: "Google Gemini",
-    desc: "Gemini 2.5 Flash / Pro via Google's official SDK. Requires: pip install 'hushclaw[gemini]'",
-    needsKey: true,
-    defaultModel: "gemini-2.5-flash-preview-04-17",
-    modelSuggestions: [
-      "gemini-2.5-flash-preview-04-17",
-      "gemini-2.5-pro-preview-05-06",
-      "gemini-2.0-flash",
-      "gemini-1.5-pro",
-      "gemini-1.5-flash",
-    ],
-    keyLabel: "API Key",
-    keyPlaceholder: "AIza…",
-    keyHint: 'Get your key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a>. Also accepts the <code>GEMINI_API_KEY</code> env var.',
-    defaultBaseUrl: "",
-    baseUrlLabel: "Base URL (leave blank for default)",
-  },
-  {
-    id: "ollama",
-    name: "Ollama (local)",
-    desc: "Run models locally via Ollama. No API key required.",
-    needsKey: false,
-    defaultModel: "llama3.2",
-    modelSuggestions: ["llama3.2", "llama3.1", "mistral", "qwen2.5", "phi3"],
-    keyLabel: "",
-    keyPlaceholder: "",
-    keyHint: 'Install Ollama from <a href="https://ollama.ai" target="_blank" rel="noopener">ollama.ai</a>, then run <code>ollama pull llama3.2</code>',
-    defaultBaseUrl: "http://localhost:11434",
-    baseUrlLabel: "Ollama base URL",
-  },
-  {
-    id: "transsion",
-    name: "Transsion / TEX AI Router",
-    desc: "TEX AI Router — enterprise multi-model gateway (Azure GPT / Google Gemini / ByteDance Doubao). Login with your @transsion.com email.",
-    needsKey: false,
-    authFlow: "email_code",
-    defaultModel: "azure/gpt-4o-mini",
-    modelSuggestions: [
-      "azure/gpt-4.1", "azure/gpt-4.1-mini", "azure/gpt-4o-mini",
-      "azure/gpt-5.4", "azure/gpt-5.4-mini",
-      "google/gemini-2.5-flash-lite", "google/gemini-3-flash-preview",
-    ],
-    keyLabel: "",
-    keyPlaceholder: "",
-    keyHint: "Login with your Transsion enterprise email to obtain API credentials automatically.",
-    defaultBaseUrl: "https://airouter.aibotplatform.com/v1",
-    baseUrlLabel: "TEX Router endpoint",
-  },
-];
+export const PROVIDERS = [{
+  id: "voxnexus", name: "VoxNexus", needsKey: false,
+  defaultModel: "", defaultBaseUrl: "", modelSuggestions: [],
+}];
 
-export function providerById(id) {
-  const ALIASES = {
-    "openai-raw":    "openai-sdk",
-    "anthropic-sdk": "anthropic-raw",
-    "aigocode-raw":  "anthropic-raw",
-    "aigocode":      "anthropic-raw",
-    "google":        "gemini",
-    "tex":           "transsion",
-  };
-  const normalised = ALIASES[id] || id;
-  return PROVIDERS.find((p) => p.id === normalised) || PROVIDERS[0];
-}
+export function providerById() { return PROVIDERS[0]; }
 
 // ── Channel definitions ────────────────────────────────────────────────────
 

@@ -142,6 +142,11 @@ def _transsion(config: ProviderConfig) -> LLMProvider:
     )
 
 
+def _voxnexus(config: ProviderConfig) -> LLMProvider:
+    from hushclaw.providers.voxnexus import VoxNexusProvider
+    return VoxNexusProvider(config)
+
+
 # Register built-ins under their canonical names and aliases
 _PROVIDERS.update({
     "anthropic-raw": _anthropic_raw,
@@ -156,6 +161,7 @@ _PROVIDERS.update({
     "minimax":       _minimax,          # MiniMax M2 series — OpenAI-compatible
     "gemini":        _gemini,           # Google Gemini via google-genai SDK
     "google":        _gemini,           # alias
+    "voxnexus":      _voxnexus,
     "transsion":     _transsion,        # Transsion / TEX AI Router
     "tex":           _transsion,        # alias
 })

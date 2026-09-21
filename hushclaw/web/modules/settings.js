@@ -8,14 +8,8 @@
 // providers
 export { PROVIDERS, providerById, CHANNELS, _isConfigured } from "./settings/providers.js";
 
-// transsion / model tab
-export {
-  setTxFromConfig, getTxForSave, clearTestTimer,
-  handleTestProviderStep, handleTestProviderResult,
-  resetTranssionPendingUi,
-  handleTransssionCodeSent, handleTransssionAuthed, handleTransssionQuotaResult,
-  renderModelTab, handleModelsResponse,
-} from "./settings/transsion.js";
+// account centre
+export { renderModelTab, handleVoxResult } from "./settings/voxnexus.js";
 
 // save
 export { clearWizardSaveTimer, syncFormToState, validateSettings, saveSettings } from "./settings/save.js";

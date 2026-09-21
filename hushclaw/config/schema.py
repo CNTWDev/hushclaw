@@ -7,6 +7,7 @@ from hushclaw.exceptions import ConfigError
 from hushclaw.prompts import build_system_prompt
 
 DEFAULT_PROVIDER_TIMEOUT_SECONDS = 360
+DEFAULT_VOXNEXUS_BASE_URL = "https://aon-ai-gateway.voxnexus.ai"
 # Streaming is latency-sensitive. Keep the existing completion timeout for
 # long non-streaming requests, but never let an idle SSE connection block a
 # chat turn for several minutes.
@@ -83,7 +84,7 @@ class UpdateConfig:
 
 @dataclass
 class AgentConfig:
-    model: str = "claude-sonnet-4-6"
+    model: str = ""
     # Auxiliary model for titles, profile extraction, reflections, compaction,
     # and other secondary work. The primary agent loop always uses model.
     cheap_model: str = ""
@@ -135,7 +136,7 @@ class AgentConfig:
 
 @dataclass
 class ProviderConfig:
-    name: str = "anthropic-raw"
+    name: str = "voxnexus"
     api_key: str = ""
     # Credential pool for rotation on 429 / rate-limit errors.
     # When non-empty, the loop cycles through these keys before falling back to
@@ -146,13 +147,18 @@ class ProviderConfig:
     timeout: int = DEFAULT_PROVIDER_TIMEOUT_SECONDS
     max_retries: int = 3          # Retry count on transient errors (0 = no retry)
     retry_base_delay: float = 1.0  # Base delay in seconds for exponential backoff
-    # Token pricing in USD per 1,000 tokens (0.0 = not configured, no cost display)
+    # Public OAuth deployment identity; tokens are stored only in the OS keyring.
+    voxauth_issuer: str = "https://auth.voxnexus.ai"
+    voxauth_client_id: str = "hushclaw-desktop"
+    # Token pricing for legacy CLI providers.
     cost_per_1k_input_tokens: float = 0.0
     cost_per_1k_output_tokens: float = 0.0
 
     def __post_init__(self):
         if self.max_retries < 0:
             raise ConfigError(f"max_retries must be >= 0, got {self.max_retries}")
+        if self.name == "voxnexus" and not (self.base_url or "").strip():
+            self.base_url = DEFAULT_VOXNEXUS_BASE_URL
 
     @property
     def credential_pool(self) -> list[str]:

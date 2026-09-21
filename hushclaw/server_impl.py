@@ -1735,16 +1735,15 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             await self._handle_save_config(ws, data)
         elif msg_type == "save_update_policy":
             await self._handle_save_update_policy(ws, data)
-        elif msg_type == "test_provider":
-            await self._handle_test_provider(ws, data)
         elif msg_type == "test_email":
             await self._handle_test_email(ws, data)
         elif msg_type == "test_calendar":
             await self._handle_test_calendar(ws, data)
         elif msg_type == "test_app_connector":
             await self._handle_test_app_connector(ws, data)
-        elif msg_type == "list_models":
-            await self._handle_list_models(ws, data)
+        elif msg_type == "voxnexus":
+            from hushclaw.server.voxnexus_handler import handle_voxnexus
+            await handle_voxnexus(ws, data, self._gateway)
         elif msg_type == "check_update":
             await self._handle_check_update(ws, data)
         elif msg_type == "prepare_update":
@@ -1789,11 +1788,5 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             await self._handle_delete_skill(ws, data)
         elif msg_type == "prune_skill_overrides":
             await self._handle_prune_skill_overrides(ws, data)
-        elif msg_type == "transsion_send_code":
-            await self._handle_transsion_send_code(ws, data)
-        elif msg_type == "transsion_login":
-            await self._handle_transsion_login(ws, data)
-        elif msg_type == "transsion_quota":
-            await self._handle_transsion_quota(ws, data)
         else:
             await ws.send(json.dumps({"type": "error", "message": f"Unknown type: {msg_type!r}"}))

@@ -108,6 +108,8 @@ class ErrorRecovery:
 def _classify_by_status(status: int, exc: Exception) -> ErrorRecovery | None:
     """Return an ErrorRecovery based on HTTP status code, or None if unrecognised."""
     msg = redact_credentials(str(exc))
+    if status == 402:
+        return ErrorRecovery(False, False, False, msg, exc)
     if status in (401, 403):
         return ErrorRecovery(
             retryable=False, should_compress=False, is_auth_failure=True,

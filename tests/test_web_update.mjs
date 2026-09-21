@@ -81,7 +81,7 @@ test('installation does not auto-activate; activation finishes cache cleanup and
     },
     caches: {
       open: async () => ({ addAll: async () => { cached = true; } }),
-      keys: async () => ['hushclaw-v47', 'hushclaw-v48'],
+      keys: async () => ['hushclaw-v47', 'hushclaw-v53'],
       delete: async key => deleted.push(key),
     },
   });

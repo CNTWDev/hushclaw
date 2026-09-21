@@ -48,11 +48,13 @@ def test_default_config(monkeypatch, tmp_path):
     monkeypatch.setattr(loader_mod, "_data_dir",   lambda: tmp_path)
     config = load_config()
     assert isinstance(config, Config)
-    assert config.agent.model == "claude-sonnet-4-6"
+    assert config.agent.model == ""
     assert config.agent.max_tokens == 16384
     assert config.agent.max_tool_rounds == 20
     assert config.agent.stream_mode == "final_only"
-    assert config.provider.name == "anthropic-raw"
+    assert config.provider.name == "voxnexus"
+    assert config.provider.base_url == "https://aon-ai-gateway.voxnexus.ai"
+    assert config.provider.voxauth_client_id == "hushclaw-desktop"
     assert config.provider.timeout == 360
     assert config.memory.data_dir is not None
     assert config.tools.timeout == 30
@@ -90,7 +92,7 @@ def test_env_override(monkeypatch, tmp_path):
     assert config.server.public_base_url == "https://downloads.example.com"
 
 
-def test_config_status_requires_saved_provider_key(monkeypatch, tmp_path):
+def test_voxnexus_status_ignores_legacy_environment_key(monkeypatch, tmp_path):
     import hushclaw.config.loader as loader_mod
 
     monkeypatch.setattr(loader_mod, "_config_dir", lambda: tmp_path)
@@ -101,13 +103,13 @@ def test_config_status_requires_saved_provider_key(monkeypatch, tmp_path):
     config = load_config()
     status = _FakeConfigServer(config)._config_status()
 
-    assert status["api_key_set"] is True
+    assert status["api_key_set"] is False
     assert status["api_key_saved"] is False
     assert status["configured"] is False
     assert status["api_key_masked"] == ""
 
 
-def test_config_status_accepts_explicit_saved_provider_key(monkeypatch, tmp_path):
+def test_config_status_legacy_key_does_not_complete_voxnexus_setup(monkeypatch, tmp_path):
     import hushclaw.config.loader as loader_mod
 
     monkeypatch.setattr(loader_mod, "_config_dir", lambda: tmp_path)
@@ -123,7 +125,7 @@ def test_config_status_accepts_explicit_saved_provider_key(monkeypatch, tmp_path
 
     assert status["api_key_set"] is True
     assert status["api_key_saved"] is True
-    assert status["configured"] is True
+    assert status["configured"] is False
     assert status["api_key_masked"] == "save…3456"
 
 

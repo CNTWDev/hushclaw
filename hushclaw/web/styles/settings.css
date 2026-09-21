@@ -513,3 +513,32 @@
   flex-shrink: 0;
 }
 .wizard-footer button#wbtn-save { min-width: 76px; }
+
+/* VoxNexus account centre */
+.vox-profile-head { display: flex; align-items: center; gap: 14px; }
+.vox-profile-head h2 { margin: 0 0 4px; font-size: 22px; }
+.vox-profile-head p { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+.vox-avatar { display: grid; place-items: center; width: 48px; height: 48px; flex-shrink: 0; border-radius: 16px; background: var(--accent); color: white; font-size: 23px; font-weight: 700; }
+.vox-badge { margin-left: auto; border: 1px solid var(--border); border-radius: 20px; padding: 4px 10px; font-size: 12px; white-space: nowrap; }
+.vox-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.vox-balance { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; }
+.vox-balance > div { border: 1px solid var(--border); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
+.vox-balance strong { font-size: clamp(22px, 4vw, 32px); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.vox-balance span, .vox-balance small { color: var(--muted); }
+.vox-packages { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 18px; }
+.vox-package { display: flex; flex-direction: column; gap: 8px; text-align: left; padding: 16px !important; height: auto; min-height: 106px; border-radius: 12px; align-items: flex-start; white-space: normal; }
+.vox-package span { font-size: 12px; }
+.vox-message { padding: 12px; border-radius: 8px; background: var(--surface2); font-size: 13px; }
+.vox-error { color: var(--err, #d55555); }
+.vox-order { margin-top: 16px; font-size: 13px; overflow-wrap: anywhere; }
+.vox-order button { margin-left: 12px; }
+.vox-model-meta { display: flex; flex-wrap: wrap; gap: 8px 16px; color: var(--muted); font-size: 12px; margin: 10px 0 16px; }
+@media (max-width: 480px) { .vox-balance { grid-template-columns: 1fr; } .vox-profile-head { flex-wrap: wrap; } }
+
+@media (max-width: 600px) {
+  .wizard-card { max-height: 94vh; }
+  .wizard-layout { flex-direction: column; }
+  .wizard-nav { width: 100%; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); }
+  .wizard-nav .settings-tab-btn { width: auto; flex: 1 0 auto; text-align: center; border-left: 0; }
+  .wizard-body { padding: 20px; }
+}

@@ -23,10 +23,8 @@ import { receiveMessageFeedback } from './chat/feedback.js';
 
 import {
   handleConfigStatus, handleConfigSaved, openWizard,
-  handleModelsResponse, handleTestProviderStep, handleTestProviderResult,
+  handleVoxResult,
   handleTestIntegrationStep, handleTestIntegrationResult,
-  handleTransssionCodeSent, handleTransssionAuthed, handleTransssionQuotaResult,
-  resetTranssionPendingUi,
   resetWizardTimers,
 } from "./settings.js";
 
@@ -565,6 +563,9 @@ export function handleMessage(data) {
     case "file_metadata_updated":
       handleFileMetadataUpdated(data);
       break;
+    case "voxnexus_result":
+      handleVoxResult(data);
+      break;
     case "config_status":
       handleConfigStatus(data);
       refreshChatStats();
@@ -840,7 +841,6 @@ export function handleMessage(data) {
       debugUiLifecycle("session_error", { session_id: eventSessionId(data) || getCurrentSessionId(), tab: state.tab, message: data.message || "" });
       finalizeAiMsg();
       insertErrorMsg(data.message || "Unknown error");
-      resetTranssionPendingUi(data.message || "");
       syncComposerState();
       scheduleSessionListRefresh(eventSessionId(data) || getCurrentSessionId(), [260]);
       break;
@@ -1157,9 +1157,6 @@ export function handleMessage(data) {
     }
     case "pong":
       break;
-    case "models":
-      handleModelsResponse(data);
-      break;
     case "skills":
       setSkillStats(data);
       handleSkillsList(data);
@@ -1204,12 +1201,6 @@ export function handleMessage(data) {
       break;
     case "skill_import_result":
       handleSkillImportResult(data);
-      break;
-    case "test_provider_step":
-      handleTestProviderStep(data);
-      break;
-    case "test_provider_result":
-      handleTestProviderResult(data);
       break;
     case "test_integration_step":
       handleTestIntegrationStep(data);
@@ -1300,15 +1291,6 @@ export function handleMessage(data) {
       if (data.ok) {
         send({ type: "list_scheduled_tasks" });
       }
-      break;
-    case "transsion_code_sent":
-      handleTransssionCodeSent(data);
-      break;
-    case "transsion_authed":
-      handleTransssionAuthed(data);
-      break;
-    case "transsion_quota_result":
-      handleTransssionQuotaResult(data);
       break;
     case "calendar_events":
       renderCalendarEvents(data.items || [], data);

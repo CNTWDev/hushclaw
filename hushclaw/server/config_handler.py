@@ -82,6 +82,32 @@ async def handle_save_config(ws, data: dict, apply_config, credential_service=No
         bool(incoming.get("transsion")),
     )
 
+    # Enforce the account gate on the server as well as in Settings.
+    if prov_in or any(k in incoming.get("agent", {}) for k in ("model", "cheap_model")):
+        try:
+            from hushclaw.config.loader import load_config
+            from hushclaw.providers.voxnexus_auth import get_session
+            from hushclaw.server.voxnexus_handler import require_available
+            from hushclaw.exceptions import ProviderError
+            active = load_config().provider
+            if active.name != "voxnexus" or prov_in.get("name", "voxnexus") != "voxnexus":
+                raise ProviderError("Settings 仅支持 VoxNexus，请先完成网关部署配置。")
+            session = get_session(active)
+            await require_available(session)
+            ids = {m["id"] for m in (await session.request("/v1/models")).get("data", []) if isinstance(m, dict) and m.get("id")}
+            agent_in = incoming.get("agent", {})
+            for field in ("model", "cheap_model"):
+                if field in agent_in and (field == "model" or agent_in[field]) and agent_in[field] not in ids:
+                    raise ProviderError("请选择网关返回的可用模型。")
+            # Settings cannot change the deployment or inject credentials.
+            incoming["provider"] = {"name": "voxnexus", "base_url": active.base_url,
+                                    "voxauth_issuer": active.voxauth_issuer,
+                                    "voxauth_client_id": active.voxauth_client_id}
+        except Exception as exc:
+            error = str(exc) if isinstance(exc, ProviderError) else "VoxNexus 验证失败，请重新登录后重试。"
+            await ws.send(json.dumps({"type": "config_saved", "ok": False, "error": error, "save_client_id": save_cid}))
+            return
+
     cfg_dir = get_config_dir()
     cfg_file = cfg_dir / "hushclaw.toml"
 
@@ -113,7 +139,7 @@ async def handle_save_config(ws, data: dict, apply_config, credential_service=No
                 incoming[key] = derived[key]
 
     # Deep-merge only the sections the wizard touched
-    for section in ("provider", "agent", "context", "memory", "server", "update", "transsion"):
+    for section in ("provider", "agent", "context", "memory", "server", "update"):
         if section in incoming and isinstance(incoming[section], dict):
             sec = existing.setdefault(section, {})
             for k, v in incoming[section].items():
@@ -127,6 +153,12 @@ async def handle_save_config(ws, data: dict, apply_config, credential_service=No
                     continue
                 if v != "":          # skip empty strings (wizard left blank)
                     sec[k] = v
+
+    if existing.get("provider", {}).get("name") == "voxnexus":
+        # OAuth credentials live exclusively in the OS keychain.
+        existing["provider"].pop("api_key", None)
+        existing["provider"].pop("api_keys", None)
+        existing.pop("transsion", None)
 
     # email and calendar: multi-account lists (array-of-tables in TOML)
     for list_key in ("email", "calendar"):

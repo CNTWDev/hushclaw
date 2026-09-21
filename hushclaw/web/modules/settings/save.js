@@ -9,7 +9,7 @@ import {
   els, send, escHtml,
 } from "../state.js";
 import { providerById } from "./providers.js";
-import { getTxForSave } from "./transsion.js";
+import { vox, voxReady } from "./voxnexus.js";
 
 // ── Save timer (exported so handlers.js can clear on reconnect) ─────────────
 let _wizardSaveTimer = null;
@@ -22,13 +22,9 @@ export function clearWizardSaveTimer() {
 // ── Form → state sync ───────────────────────────────────────────────────────
 
 export function syncFormToState() {
-  const apikeyEl    = document.getElementById("wiz-apikey");
-  const burlEl      = document.getElementById("wiz-baseurl");
   const timeoutEl   = document.getElementById("wiz-provider-timeout");
   const modelEl     = document.getElementById("wiz-model");
   const modelSelEl  = document.getElementById("wiz-model-select");
-  if (apikeyEl) wizard.apiKey  = apikeyEl.value.trim();
-  if (burlEl)   wizard.baseUrl = burlEl.value.trim();
   if (timeoutEl) {
     const v = parseInt(timeoutEl.value, 10);
     if (!Number.isNaN(v)) wizard.providerTimeout = v;
@@ -243,8 +239,6 @@ export function syncFormToState() {
   const cheapModelSelEl = document.getElementById("wiz-cheap-model-select");
   const maxRndEl    = document.getElementById("sys-max-tool-rounds");
   const syspromptEl = document.getElementById("sys-system-prompt");
-  const costInEl    = document.getElementById("sys-cost-in");
-  const costOutEl   = document.getElementById("sys-cost-out");
   const themeModeEl  = document.querySelector('input[name="ui-theme-mode"]:checked');
   if (maxTokEl) {
     const v = parseInt(maxTokEl.value, 10);
@@ -263,8 +257,6 @@ export function syncFormToState() {
     wizard.systemPrompt = syspromptEl.value;
     wizard.systemPromptDefault = false;
   }
-  if (costInEl)    wizard.costIn        = parseFloat(costInEl.value)  || 0.0;
-  if (costOutEl)   wizard.costOut       = parseFloat(costOutEl.value) || 0.0;
   if (themeModeEl) wizard.themeMode = themeModeEl.value;
   wizard.theme = "vector";
   const updAutoEl = document.getElementById("upd-auto-check");
@@ -371,43 +363,17 @@ export function syncFormToState() {
   }
 }
 
+function savingModelSettings() {
+  const cfg = wizard.serverConfig || {};
+  return wizard.tab === "model" || wizard.model !== (cfg.provider === "voxnexus" ? (cfg.model || "") : "") ||
+    (wizard.cheapModel || "") !== (cfg.provider === "voxnexus" ? (cfg.cheap_model || "") : "");
+}
+
 export function validateSettings() {
-  const prov = providerById(wizard.provider);
-  if (wizard.provider === "transsion") {
-    const tx = getTxForSave();
-    const hasKey =
-      Boolean(wizard.apiKey) ||
-      (wizard.serverConfig &&
-        wizard.serverConfig.provider === "transsion" &&
-        wizard.serverConfig.api_key_saved);
-    const hasSignedInSession = Boolean(tx.accessToken && wizard.apiKey);
-    const hasSavedAuthedSession =
-      Boolean(wizard.serverConfig &&
-        wizard.serverConfig.provider === "transsion" &&
-        wizard.serverConfig.transsion &&
-        wizard.serverConfig.transsion.authed);
-    if (!hasKey) {
-      return "Sign in with your Transsion email and verification code first, then click Save.";
-    }
-    if (!wizard.providerTestOk && !hasSignedInSession && !hasSavedAuthedSession) {
-      return "Complete the Transsion sign-in test before saving.";
-    }
-  }
-  if (prov.needsKey) {
-    if (wizard.apiKey && /^https?:\/\//i.test(wizard.apiKey)) {
-      return "API Key looks like a URL. Paste the key value, not the endpoint URL.";
-    }
-    const alreadySet =
-      wizard.serverConfig &&
-      wizard.serverConfig.provider === wizard.provider &&
-      wizard.serverConfig.api_key_saved;
-    if (!wizard.apiKey && !alreadySet) {
-      return `${prov.keyLabel} is required. Go to the Model tab to enter it.`;
-    }
-    if (!wizard.providerTestOk) {
-      return "Test the model connection successfully before saving.";
-    }
-  }
+  if (!savingModelSettings()) return "";
+  if (!voxReady()) return "请先登录 VoxNexus 并确保可用额度大于 0。";
+  if (!vox.models.some(m => m.id === wizard.model)) return "请从网关模型列表选择主模型。";
+  if (wizard.cheapModel && !vox.models.some(m => m.id === wizard.cheapModel)) return "请重新选择后台任务模型。";
   return "";
 }
 
@@ -421,7 +387,6 @@ export function saveSettings() {
     return;
   }
 
-  const { email: txEmail, displayName: txDisplayName, accessToken: txAccessToken } = getTxForSave();
 
   const prov    = providerById(wizard.provider);
   const model   = wizard.model || prov.defaultModel;
@@ -629,7 +594,7 @@ export function saveSettings() {
   if (xc.refresh_token) xConfig.refresh_token = xc.refresh_token;
 
   const config = {
-    provider: { name: wizard.provider, base_url: baseUrl, timeout: wizard.providerTimeout || 360 },
+    provider: { name: "voxnexus", base_url: baseUrl, timeout: wizard.providerTimeout || 360 },
     agent: {
       model,
       cheap_model:     wizard.cheapModel || "",
@@ -700,17 +665,10 @@ export function saveSettings() {
       ...(a.password ? { password: a.password } : {}),
     })),
   };
-  if (wizard.apiKey && (prov.needsKey || wizard.provider === "transsion")) {
-    config.provider.api_key = wizard.apiKey;
-  }
-  if (wizard.provider === "transsion" && txEmail) {
-    config.transsion = {
-      email:        txEmail,
-      display_name: txDisplayName || "",
-    };
-    if (txAccessToken) {
-      config.transsion.access_token = txAccessToken;
-    }
+  if (!savingModelSettings()) {
+    delete config.provider;
+    delete config.agent.model;
+    delete config.agent.cheap_model;
   }
   config.agent = config.agent || {};
   const prompt = (wizard.systemPrompt || "").trim();
@@ -722,8 +680,6 @@ export function saveSettings() {
     config.agent.system_prompt = "";
   }
   config.agent.workspace_dir = wizard.workspaceDir || "";
-  if (wizard.costIn  > 0) config.provider.cost_per_1k_input_tokens  = wizard.costIn;
-  if (wizard.costOut > 0) config.provider.cost_per_1k_output_tokens = wizard.costOut;
   config.tools = {
     user_skill_dir: wizard.userSkillDir || "",
     profile:        wizard.toolsProfile || "",

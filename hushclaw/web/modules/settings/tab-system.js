@@ -141,20 +141,6 @@ export function renderSystemTab() {
       </div>
     </div>
     <div class="settings-section">
-      <h3 class="settings-section-h">Pricing <span class="wfield-optional">(optional)</span></h3>
-      <p class="wdesc">Used for cost estimation in the chat UI. Set to 0.0 to disable.</p>
-      <div class="wfield">
-        <label>Input cost (USD / 1k tokens)</label>
-        <input type="number" id="sys-cost-in" min="0" step="0.0001"
-               value="${escHtml(String(wizard.costIn))}">
-      </div>
-      <div class="wfield">
-        <label>Output cost (USD / 1k tokens)</label>
-        <input type="number" id="sys-cost-out" min="0" step="0.0001"
-               value="${escHtml(String(wizard.costOut))}">
-      </div>
-    </div>
-    <div class="settings-section">
       <h3 class="settings-section-h">Developer Mode</h3>
       <div class="connector-row">
         <div class="connector-meta">

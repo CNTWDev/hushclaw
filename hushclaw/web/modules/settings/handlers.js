@@ -1,6 +1,6 @@
 /**
  * settings/handlers.js — handleConfigStatus, handleConfigSaved, resetWizardTimers.
- * Owns no UI state — delegates timer clearing to save.js and transsion.js.
+ * Owns no UI state — delegates timer clearing to save.js and voxnexus.js.
  */
 
 import {
@@ -15,7 +15,7 @@ import { providerById } from "./providers.js";
 import { getTheme, getThemeMode } from "../theme.js";
 import { resetChatSessionUiState } from "../chat.js";
 import { maybeAutoCheckUpdates } from "../updates.js";
-import { setTxFromConfig, clearTestTimer } from "./transsion.js";
+import { setVoxConfig, resetVoxRequests } from "./voxnexus.js";
 import { openWizard, renderSettingsModal } from "./tab-misc.js";
 import { checkCalendarTimezone } from "../calendar.js";
 import { clearWizardSaveTimer } from "./save.js";
@@ -24,13 +24,14 @@ import { clearWizardSaveTimer } from "./save.js";
 
 export function resetWizardTimers() {
   clearWizardSaveTimer();
-  clearTestTimer();
+  resetVoxRequests();
 }
 
 // ── Config status handler ─────────────────────────────────────────────────────
 
 export function handleConfigStatus(cfg) {
   wizard.serverConfig = cfg;
+  setVoxConfig(cfg.voxnexus);
   wizard.connectorStatus = cfg.connector_status || {};
   connectionsView.items = Array.isArray(cfg.connections) ? cfg.connections : [];
   window.__HUSHCLAW_PUBLIC_BASE_URL = cfg.public_base_url || "";
@@ -50,9 +51,9 @@ export function handleConfigStatus(cfg) {
     wizard._pendingRefresh = false;
     const prov = providerById(cfg.provider);
     wizard.provider      = prov.id;
-    wizard.model         = cfg.model || prov.defaultModel;
-    wizard.cheapModel    = cfg.cheap_model || "";
-    wizard.baseUrl       = cfg.base_url || prov.defaultBaseUrl || "";
+    wizard.model         = cfg.provider === "voxnexus" ? cfg.model : "";
+    wizard.cheapModel    = cfg.provider === "voxnexus" ? (cfg.cheap_model || "") : "";
+    wizard.baseUrl       = cfg.voxnexus?.gateway || "";
     wizard.providerTimeout = cfg.provider_timeout ?? 360;
     wizard.apiKey        = "";
     wizard.providerTestOk = Boolean(cfg.configured && cfg.api_key_saved);
@@ -63,9 +64,6 @@ export function handleConfigStatus(cfg) {
     wizard.systemPromptTouched = false;
     wizard.costIn        = cfg.cost_per_1k_input_tokens  || 0.0;
     wizard.costOut       = cfg.cost_per_1k_output_tokens || 0.0;
-
-    const txn = cfg.transsion || {};
-    setTxFromConfig(txn.email, txn.display_name, txn.access_token, txn.authed);
 
     const ctx = cfg.context || {};
     wizard.historyBudget        = ctx.history_budget        ?? 140000;
@@ -389,6 +387,8 @@ export function handleConfigStatus(cfg) {
 
   if (!cfg.configured && !wizard.open) {
     openWizard(false);
+  } else if (wizard.open && wizard.tab === "model") {
+    renderSettingsModal();
   }
   maybeAutoCheckUpdates(cfg);
 }

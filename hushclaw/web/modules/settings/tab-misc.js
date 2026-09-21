@@ -11,7 +11,7 @@ import {
   _defaultEmailAccount, _defaultCalendarAccount,
   els, send, escHtml,
 } from "../state.js";
-import { renderModelTab } from "./transsion.js";
+import { renderModelTab } from "./voxnexus.js";
 import { renderSystemTab } from "./tab-system.js";
 import { syncFormToState } from "./save.js";
 import { t } from "../i18n.js";
@@ -31,6 +31,7 @@ document.addEventListener("locale-changed", () => {
 // ── Wizard open/close ───────────────────────────────────────────────────────
 
 export function openWizard(dismissible = true) {
+  wizard.tab         = "model";
   wizard.open        = true;
   wizard.dismissible = dismissible;
   els.wizardOverlay.classList.remove("hidden");
@@ -41,7 +42,7 @@ export function openWizard(dismissible = true) {
 export function closeWizard() {
   if (!wizard.dismissible && !wizard.savedOnce) {
     if (els.wstatus) {
-      els.wstatus.textContent = "Test and save a model key before entering chat.";
+      els.wstatus.textContent = "请先登录 VoxNexus，确认可用额度并保存模型。";
       els.wstatus.className = "wstatus err";
     }
     return;
@@ -54,7 +55,7 @@ export function closeWizard() {
 
 export function renderSettingsTabs() {
   const tabs = [
-    { id: "model",        label: t("stab_model") },
+    { id: "model",        label: "个人中心" },
     { id: "system",       label: t("stab_system") },
     { id: "memory",       label: t("stab_memory") },
     { id: "integrations", label: t("stab_integrations") },
