@@ -30,6 +30,8 @@ HushClaw 的客户端 Identifier 为 [`hushclaw-desktop`](https://auth.voxnexus.
 
 登录使用系统默认浏览器、PKCE S256、一次性随机 state；Python 只在 `127.0.0.1` 监听第一个可用端口，五分钟超时后关闭。没有 client_secret。此流程用于浏览器和 Python 服务运行在同一台电脑的单体部署；远程服务器或手机访问另一台机器的 WebUI 需要另外部署 HTTPS 回调方案。
 
+WebUI 主服务端口（例如 `8765`）与上述登录回调端口独立，无需把回调改成 `8765`。浏览器显示 `Authorization received` 只表示授权码已收到，登录完成仍需 Python 换取令牌并写入系统钥匙串。个人中心会分别提示令牌接口、证书、网络和钥匙串错误。VoxAuth 和网关请求使用项目公共 CA 配置，兼容默认缺少根证书的 macOS Python 安装，并保持 TLS 证书与主机名校验。
+
 ## 会话、模型与充值
 
 access/refresh token 作为一个整体写入系统钥匙串，不进入 TOML、浏览器存储、WebSocket 或日志。所有渠道请求复用进程内同一会话，提前 60 秒串行续期；401 续期并重试一次，再失败则清除本机会话。一次部署使用一个服务进程，避免多个独立进程同时轮换同一组凭证。刷新结果不确定时也清除会话，防止重放旧 refresh token。

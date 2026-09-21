@@ -4,6 +4,7 @@ import base64
 import hashlib
 import io
 import json
+import ssl
 import time
 import urllib.error
 from types import SimpleNamespace
@@ -16,7 +17,7 @@ from hushclaw.config.schema import ProviderConfig
 from hushclaw.core.errors import classify_error
 from hushclaw.exceptions import ProviderError
 from hushclaw.providers.voxnexus import VoxNexusProvider
-from hushclaw.providers.voxnexus_auth import VoxSession, http_error
+from hushclaw.providers.voxnexus_auth import VoxSession, http_error, open_request
 from hushclaw.server.voxnexus_handler import handle_voxnexus, session_from_data
 
 
@@ -42,6 +43,49 @@ def tokens(expired=False):
 
 def response(body):
     return io.BytesIO(json.dumps(body).encode())
+
+
+def test_transport_verifies_tls_with_shared_ca_and_keeps_redirects_disabled():
+    from hushclaw.providers.voxnexus_auth import _NoRedirect
+    from hushclaw.util.ssl_context import make_ssl_context
+    req = urllib.request.Request('https://auth.example/oauth/token')
+    with patch('urllib.request.OpenerDirector.open') as send:
+        open_request(req)
+    send.assert_called_once_with(req, timeout=30)
+    context = make_ssl_context()
+    assert context.verify_mode == ssl.CERT_REQUIRED
+    assert context.check_hostname
+    with patch('urllib.request.build_opener') as build:
+        open_request(req)
+    handlers = build.call_args.args
+    assert any(isinstance(h, _NoRedirect) for h in handlers)
+    assert next(h for h in handlers if isinstance(h, urllib.request.HTTPSHandler))._context is context
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('kind, expected', [
+    ('tls', '证书验证失败'), ('network', '检查网络或代理'),
+    ('invalid_client', '公开设备客户端'), ('invalid_grant', 'PKCE'),
+    ('unknown', 'HTTP 400'), ('malformed', '无效数据'),
+])
+async def test_token_exchange_errors_are_specific_and_do_not_expose_secrets(kind, expected):
+    if kind == 'tls':
+        error = urllib.error.URLError(ssl.SSLCertVerificationError(1, 'private-value'))
+    elif kind == 'network':
+        error = urllib.error.URLError(OSError('private-value'))
+    else:
+        error = urllib.error.HTTPError('', 400, '', {}, response({
+            'error': kind if kind != 'unknown' else 'private-value',
+            'error_description': 'private-value', 'access_token': 'private-value'}))
+    with patch('hushclaw.providers.voxnexus_auth.open_request') as op:
+        if kind == 'malformed':
+            op.return_value = response(['private-value'])
+        else:
+            op.side_effect = error
+        with pytest.raises(ProviderError) as raised:
+            await session()._token({'code': 'private-value'})
+    assert expected in str(raised.value)
+    assert 'private-value' not in str(raised.value)
 
 
 @pytest.mark.asyncio
@@ -113,7 +157,8 @@ async def test_429_exponential_backoff():
 
 
 @pytest.mark.asyncio
-async def test_pkce_fixed_port_fallback_wrong_state_single_use_and_logout():
+@pytest.mark.parametrize('failure', [None, 'token', 'keychain'])
+async def test_pkce_fixed_port_fallback_wrong_state_single_use_and_logout(failure):
     s = session()
     # Capture the loopback handler without depending on OS ports in the test.
     servers, handlers = [], []
@@ -139,6 +184,10 @@ async def test_pkce_fixed_port_fallback_wrong_state_single_use_and_logout():
         await handlers[0](reader, writer)
         return writer.data
     s._token = AsyncMock(return_value={'access_token': 'access', 'refresh_token': 'refresh', 'expires_in': 900})
+    if failure == 'token':
+        s._token.side_effect = ProviderError('VoxAuth 证书验证失败')
+    elif failure == 'keychain':
+        s.store.set = lambda *args: (_ for _ in ()).throw(RuntimeError('private-value'))
     with patch('asyncio.start_server', side_effect=bind):
         url = await s.start_login()
     q = parse_qs(urlsplit(url).query)
@@ -155,6 +204,13 @@ async def test_pkce_fixed_port_fallback_wrong_state_single_use_and_logout():
     challenge = base64.urlsafe_b64encode(hashlib.sha256(form['code_verifier'].encode()).digest()).rstrip(b'=').decode()
     assert challenge == q['code_challenge'][0]
     assert 'client_secret' not in form
+    if failure:
+        assert ('证书验证失败' if failure == 'token' else '系统钥匙串') in s.login_error
+        assert 'private-value' not in s.login_error
+        assert not await s.signed_in()
+        assert not s.store.get(s.key)
+        assert servers[0].closed
+        return
     assert await s.signed_in()
     assert servers[0].closed
     await s.logout()

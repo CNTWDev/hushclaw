@@ -6,12 +6,14 @@ import base64
 import hashlib
 import json
 import secrets
+import ssl
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
 from hushclaw.exceptions import ProviderError
+from hushclaw.util.ssl_context import make_ssl_context
 
 CALLBACK_PORTS = (53682, 53683, 53684)
 ISSUER = "https://auth.voxnexus.ai"
@@ -58,7 +60,9 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def open_request(request, timeout=30):
-    return urllib.request.build_opener(_NoRedirect()).open(request, timeout=timeout)
+    return urllib.request.build_opener(
+        _NoRedirect(), urllib.request.HTTPSHandler(context=make_ssl_context())
+    ).open(request, timeout=timeout)
 
 
 def http_error(status: int, request_id="") -> ProviderError:
@@ -132,8 +136,39 @@ class VoxSession:
             data=urllib.parse.urlencode({"client_id": self.client_id, **form}).encode(),
             headers={"Content-Type": "application/x-www-form-urlencoded"})
         def exchange():
-            with open_request(req) as resp:
-                return json.load(resp)
+            try:
+                with open_request(req) as resp:
+                    value = json.load(resp)
+                if not isinstance(value, dict):
+                    raise ValueError("invalid token response")
+                return value
+            except urllib.error.HTTPError as exc:
+                # Only show recognized OAuth codes, never raw responses that
+                # could echo authorization codes, verifiers or tokens.
+                hints = {
+                    "invalid_client": "请确认 hushclaw-desktop 注册为公开设备客户端，无需 client_secret。",
+                    "invalid_grant": "授权码已失效或 PKCE 校验失败，请重新发起登录。",
+                    "invalid_scope": "请为客户端授予 openid profile email aon-gateway 权限。",
+                    "unauthorized_client": "客户端未获授权，请检查公开客户端类型与授权方式。",
+                    "invalid_request": "授权请求参数未被接受，请检查客户端及回调配置。",
+                }
+                try:
+                    body = json.loads(exc.read(8192))
+                    code = body.get("error") if isinstance(body, dict) else None
+                except (ValueError, OSError):
+                    code = None
+                finally:
+                    exc.close()
+                hint = hints.get(code) if isinstance(code, str) else None
+                detail = f"{code}：{hint}" if hint else "认证服务暂时不可用，请稍后重试。"
+                raise ProviderError(f"VoxAuth 换取令牌失败（HTTP {exc.code}）：{detail}", status_code=exc.code) from None
+            except (urllib.error.URLError, OSError) as exc:
+                reason = getattr(exc, "reason", exc)
+                if isinstance(reason, ssl.SSLCertVerificationError):
+                    raise ProviderError("VoxAuth 证书验证失败，请检查本机 Python 的 CA 证书配置。") from None
+                raise ProviderError("连接 VoxAuth 令牌接口失败，请检查网络或代理后重试。") from None
+            except ValueError:
+                raise ProviderError("VoxAuth 令牌接口返回了无效数据，请联系支持。") from None
         return await asyncio.to_thread(exchange)
 
     async def access_token(self, rejected=None):
@@ -242,11 +277,18 @@ class VoxSession:
                 async with self.lock:
                     result = await self._token({"grant_type": "authorization_code", "code": code,
                                                "code_verifier": verifier, "redirect_uri": redirect})
-                    await self._save(result)
+                    try:
+                        await self._save(result)
+                    except ProviderError:
+                        raise
+                    except Exception:
+                        raise ProviderError("无法将登录态保存到系统钥匙串，请解锁钥匙串并允许 HushClaw 访问后重试。") from None
             except asyncio.TimeoutError:
                 self.login_error = "登录超时，请重试。"
+            except ProviderError as exc:
+                self.login_error = str(exc)
             except Exception:
-                self.login_error = "登录失败，请检查 client_id、已注册回调地址和 aon-gateway 权限后重试。"
+                self.login_error = "VoxAuth 登录未完成，请重新登录；持续失败请联系支持。"
             finally:
                 server.close()
                 await server.wait_closed()
