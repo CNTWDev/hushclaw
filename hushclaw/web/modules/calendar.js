@@ -1,3 +1,4 @@
+import { uiText, localeTag } from "./i18n.js";
 /** My itinerary: rendering only; native sources and interval math stay separate. */
 import { send, calendarCfg, state } from './state.js';
 import { dayKey, shiftDay, wallInput, segments, timedEventLayout, gaps, conflictCount, clockLabel } from './calendar_math.js';
@@ -75,25 +76,25 @@ function requestEvents() {
     to_time: shiftDay(d.at(-1), 2)
   });
 }
-const displayDate = (key, options = {}) => new Date(key + 'T12:00:00').toLocaleDateString(undefined, {
+const displayDate = (key, options = {}) => new Date(key + 'T12:00:00').toLocaleDateString(localeTag(), {
   month: 'short',
   day: 'numeric',
   ...options
 });
-const clock = iso => new Date(iso).toLocaleTimeString(undefined, {
+const clock = iso => new Date(iso).toLocaleTimeString(localeTag(), {
   timeZone: zone(),
   hour: '2-digit',
   minute: '2-digit',
   hourCycle: 'h23'
 });
 const sourceName = e => ({
-  macos: '本机日历',
+  macos: uiText("On device"),
   google: 'Google',
   caldav: 'CalDAV',
   local: 'HushClaw'
 })[e.source || 'local'] || e.source;
 function chip(e) {
-  return `<button class="it-event" data-event="${esc(e.event_id)}" data-source="${esc(e.source || 'local')}"><strong>${esc(e.title)}</strong><small>${e.all_day ? '全天' : esc(clock(e.start_time))}</small></button>`;
+  return `<button class="it-event" data-event="${esc(e.event_id)}" data-source="${esc(e.source || 'local')}"><strong>${esc(e.title)}</strong><small>${e.all_day ? uiText("All day") : esc(clock(e.start_time))}</small></button>`;
 }
 function navigate(date, view = data.view) {
   data.date = date;
@@ -121,9 +122,9 @@ function render() {
   const next = events.filter(e => !e.all_day && Date.parse(e.end_time) > Date.now()).sort((a, b) => Date.parse(a.start_time) - Date.parse(b.start_time))[0];
   const conflict = conflictCount(daily),
     free = gaps(daily).sort((a, b) => b[1] - b[0] - (a[1] - a[0]))[0];
-  const nextText = next ? `${Date.parse(next.start_time) <= Date.now() ? '进行中' : '下一场'} · ${dayKey(next.start_time, zone()) !== current ? displayDate(dayKey(next.start_time, zone())) + ' ' : ''}${clock(next.start_time)} ${next.title}` : '';
+  const nextText = next ? `${Date.parse(next.start_time) <= Date.now() ? uiText("In progress") : uiText("Up next")} · ${dayKey(next.start_time, zone()) !== current ? displayDate(dayKey(next.start_time, zone())) + ' ' : ''}${clock(next.start_time)} ${next.title}` : '';
   const dayLabel = data.view === 'day' ? '' : displayDate(data.date) + ' · ';
-  $('cal-summary').innerHTML = `<span>${esc(dayLabel + `${daily.length} 项行程`)}</span>${conflict ? `<span class="it-warning">${conflict} 对行程时间重叠</span>` : ''}${free ? `<span class="it-muted">${clockLabel(free[0])}–${clockLabel(free[1])} 当前筛选中无行程</span>` : ''}${data.date === current && next ? `<span class="it-next" title="已加载来源中的下一场行程">${esc(nextText)}</span>` : ''}`;
+  $('cal-summary').innerHTML = `<span>${esc(dayLabel + uiText("{n} events", {n: daily.length}))}</span>${conflict ? `<span class="it-warning">${uiText("{n} overlapping pairs", {n: conflict})}</span>` : ''}${free ? `<span class="it-muted">${clockLabel(free[0])}–${clockLabel(free[1])} ${uiText("No events in this filter")}</span>` : ''}${data.date === current && next ? `<span class="it-next" title="Next event from loaded sources" data-i18n-title="ui:Next event from loaded sources">${esc(nextText)}</span>` : ''}`;
   const host = $('cal-content'),
     scroll = host.scrollTop,
     scope = data.view + data.date,
@@ -141,15 +142,15 @@ function render() {
 function timeline(host, range, events, current) {
   let html = `<div class="it-time-layout" style="--it-days:${range.length}"><div class="it-time-head"><span></span>${range.map(d => `<button class="${d === current ? 'is-today' : ''}" data-date="${d}">${esc(displayDate(d, {
     weekday: 'short'
-  }))}</button>`).join('')}</div><div class="it-allday"><span>全天</span>${range.map(d => `<div>${segments(events, d, zone()).filter(r => r.allDay).map(r => chip(r.event)).join('')}</div>`).join('')}</div><div class="it-time-grid"><div class="it-hours">${Array.from({
+  }))}</button>`).join('')}</div><div class="it-allday"><span data-i18n="ui:All day">全天</span>${range.map(d => `<div>${segments(events, d, zone()).filter(r => r.allDay).map(r => chip(r.event)).join('')}</div>`).join('')}</div><div class="it-time-grid"><div class="it-hours">${Array.from({
     length: 24
   }, (_, i) => `<span>${clockLabel(i * 60)}</span>`).join('')}</div>`;
   for (const d of range) {
     html += `<div class="it-day-column ${d === current ? 'is-today' : ''}">`;
-    for (let h = 0; h < 24; h++) html += `<button class="it-slot" data-new="${d}T${String(h).padStart(2, '0')}:00" aria-label="${d} ${h}:00 新建行程" style="top:${h * 52}px"></button>`;
+    for (let h = 0; h < 24; h++) html += `<button class="it-slot" data-new="${d}T${String(h).padStart(2, '0')}:00" aria-label="${d} ${h}:00 ${uiText("＋ New event")}" style="top:${h * 52}px"></button>`;
     for (const r of timedEventLayout(segments(events, d, zone()))) {
-      const label = `${r.event.title}，${clockLabel(r.start)}–${clockLabel(r.end)}${r.conflict ? '，时间冲突' : ''}`;
-      html += `<button class="it-event it-timed" data-density="${r.density}" data-event="${esc(r.event.event_id)}" data-source="${esc(r.event.source || 'local')}" aria-label="${esc(label)}" title="${esc(label)}" style="top:${r.top}px;height:${r.height}px;left:calc(${r.column / r.columns * 100}% + 3px);width:calc(${100 / r.columns}% - 6px)"><strong>${r.continued ? '↳ ' : ''}${esc(r.event.title)}</strong>${r.density !== 'compact' ? `<small>${clockLabel(r.start)}–${clockLabel(r.end)}${r.conflict ? ' · 冲突' : ''}</small>` : ''}${range.length === 1 && r.showLocation ? `<small>${esc(r.event.location || sourceName(r.event))}</small>` : ''}</button>`;
+      const label = `${r.event.title}，${clockLabel(r.start)}–${clockLabel(r.end)}${r.conflict ? ' · ' + uiText('Time conflict') : ''}`;
+      html += `<button class="it-event it-timed" data-density="${r.density}" data-event="${esc(r.event.event_id)}" data-source="${esc(r.event.source || 'local')}" aria-label="${esc(label)}" title="${esc(label)}" style="top:${r.top}px;height:${r.height}px;left:calc(${r.column / r.columns * 100}% + 3px);width:calc(${100 / r.columns}% - 6px)"><strong>${r.continued ? '↳ ' : ''}${esc(r.event.title)}</strong>${r.density !== 'compact' ? `<small>${clockLabel(r.start)}–${clockLabel(r.end)}${r.conflict ? ' · ' + uiText('Conflict') : ''}</small>` : ''}${range.length === 1 && r.showLocation ? `<small>${esc(r.event.location || sourceName(r.event))}</small>` : ''}</button>`;
     }
     if (d === current) {
       const text = wallInput(new Date().toISOString(), zone()).slice(11),
@@ -163,9 +164,9 @@ function timeline(host, range, events, current) {
   host.querySelectorAll('[data-new]').forEach(b => b.addEventListener('click', () => eventEditor(null, data.date, zone(), b.dataset.new)));
 }
 function month(host, range, events, current) {
-  host.innerHTML = `<div class="it-month-head">${['一', '二', '三', '四', '五', '六', '日'].map(d => `<span>周${d}</span>`).join('')}</div><div class="it-month-grid">${range.map(d => {
+  host.innerHTML = `<div class="it-month-head">${Array.from({length:7}, (_, i) => new Intl.DateTimeFormat(localeTag(), {weekday:'short', timeZone:'UTC'}).format(new Date(Date.UTC(2024, 0, 1 + i)))).map(d => `<span>${d}</span>`).join('')}</div><div class="it-month-grid">${range.map(d => {
     const rows = segments(events, d, zone());
-    return `<section class="it-month-day ${d === current ? 'is-today' : ''} ${d.slice(0, 7) !== data.date.slice(0, 7) ? 'outside-month' : ''}"><button class="it-date" data-date="${d}">${Number(d.slice(8))}</button>${rows.slice(0, 3).map(r => chip(r.event)).join('')}${rows.length > 3 ? `<button class="it-more" data-date="${d}">还有 ${rows.length - 3} 项</button>` : ''}</section>`;
+    return `<section class="it-month-day ${d === current ? 'is-today' : ''} ${d.slice(0, 7) !== data.date.slice(0, 7) ? 'outside-month' : ''}"><button class="it-date" data-date="${d}">${Number(d.slice(8))}</button>${rows.slice(0, 3).map(r => chip(r.event)).join('')}${rows.length > 3 ? `<button class="it-more" data-date="${d}">${uiText("{n} more", {n: rows.length - 3})}</button>` : ''}</section>`;
   }).join('')}</div>`;
   host.querySelectorAll('[data-date]').forEach(b => b.addEventListener('click', () => navigate(b.dataset.date, 'day')));
 }
@@ -176,9 +177,9 @@ function agenda(host, range, events, current) {
     if (!rows.length) continue;
     html += `<section class="it-agenda-day"><h3>${esc(displayDate(d, {
       weekday: 'short'
-    }))}${d === current ? ' · 今天' : ''}</h3>${rows.map(r => `<button class="it-agenda-event" data-event="${esc(r.event.event_id)}"><time>${r.allDay ? '全天' : clockLabel(r.start) + '–' + clockLabel(r.end)}</time><span><strong>${esc(r.event.title)}</strong><small>${esc(r.event.location || '未设置地点')} · ${esc(sourceName(r.event))}${r.event.source && r.event.source !== 'local' ? ' · 只读' : ''}${r.continued ? ' · 跨日行程' : ''}</small></span></button>`).join('')}</section>`;
+    }))}${d === current ? ' · ' + uiText('Today') : ''}</h3>${rows.map(r => `<button class="it-agenda-event" data-event="${esc(r.event.event_id)}"><time>${r.allDay ? uiText("All day") : clockLabel(r.start) + '–' + clockLabel(r.end)}</time><span><strong>${esc(r.event.title)}</strong><small>${esc(r.event.location || uiText("No location"))} · ${esc(sourceName(r.event))}${r.event.source && r.event.source !== 'local' ? ' · ' + uiText('Read-only') : ''}${r.continued ? ' · ' + uiText('Multi-day event') : ''}</small></span></button>`).join('')}</section>`;
   }
-  host.innerHTML = html || '<div class="it-empty"><strong>未来 30 天没有显示的行程</strong><p>可新建本地行程，或在「日历来源」中选择要展示的日历。</p></div>';
+  host.innerHTML = html || '<div class="it-empty"><strong data-i18n="ui:No events shown in the next 30 days">未来 30 天没有显示的行程</strong><p data-i18n="ui:Create a local event or choose calendars in Calendar sources.">可新建本地行程，或在「日历来源」中选择要展示的日历。</p></div>';
 }
 export function renderCalendarEvents(items, reply = {}) {
   if (reply.request_id && reply.request_id !== requestId) return;
@@ -237,10 +238,10 @@ export function initCalendar() {
   $('cal-sources-btn')?.addEventListener('click', openCalendarSourceSettings);
   $('cal-sync-btn')?.addEventListener('click', () => {
     $('cal-sync-btn').disabled = true;
-    $('cal-sync-status').textContent = '正在刷新…';
+    $('cal-sync-status').textContent = uiText("Refreshing…");
     syncTimer = setTimeout(() => {
       resetSyncButton();
-      $('cal-sync-status').textContent = '刷新超时，保留上次数据';
+      $('cal-sync-status').textContent = uiText("Refresh timed out; previous data retained");
     }, 125000);
     send({
       type: 'force_sync_caldav'
@@ -254,3 +255,5 @@ export function initCalendar() {
   }, 60000);
   render();
 }
+
+document.addEventListener("locale-changed", render);

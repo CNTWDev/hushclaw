@@ -28,7 +28,10 @@ export function registerSettingsWidget(fn) { _settingsWidgets.push(fn); }
 // Re-render settings modal when locale changes (open wizard only)
 document.addEventListener("locale-changed", () => {
   const overlay = document.getElementById("wizard-overlay");
-  if (overlay && !overlay.classList.contains("hidden")) renderSettingsModal();
+  if (overlay && !overlay.classList.contains("hidden")) {
+    // Translate annotated labels in place: retain drafts, caret and connection state.
+    renderSettingsTabs();
+  }
 });
 
 // ── Wizard open/close ───────────────────────────────────────────────────────
@@ -58,7 +61,7 @@ export function closeWizard() {
 
 export function renderSettingsTabs() {
   const tabs = [
-    { id: "model",        label: "个人中心" },
+    { id: "model",        label: t("ui:Account centre") },
     { id: "system",       label: t("stab_system") },
     { id: "memory",       label: t("stab_memory") },
     { id: "integrations", label: t("stab_integrations") },
@@ -96,10 +99,10 @@ export function renderMemoryTab() {
   const userOk = ws.user_md;
 
   const wsStatusBadge = wsConfigured
-    ? `<span style="color:var(--green,#4caf50);font-weight:600">✓ Active</span>`
-    : `<span style="color:var(--yellow,#ff9800);font-weight:600">⚠ Not initialized</span>`;
-  const soulBadge = soulOk ? `<span style="color:var(--green,#4caf50)">✓ SOUL.md</span>` : `<span style="color:var(--muted,#888)">✗ SOUL.md missing</span>`;
-  const userBadge = userOk ? `<span style="color:var(--green,#4caf50)">✓ USER.md</span>` : `<span style="color:var(--muted,#888)">✗ USER.md missing</span>`;
+    ? `<span style="color:var(--green,#4caf50);font-weight:600" data-i18n="ui:✓ Active">✓ Active</span>`
+    : `<span style="color:var(--yellow,#ff9800);font-weight:600" data-i18n="ui:⚠ Not initialized">⚠ Not initialized</span>`;
+  const soulBadge = soulOk ? `<span style="color:var(--green,#4caf50)">✓ SOUL.md</span>` : `<span style="color:var(--muted,#888)" data-i18n="ui:✗ SOUL.md missing">✗ SOUL.md missing</span>`;
+  const userBadge = userOk ? `<span style="color:var(--green,#4caf50)">✓ USER.md</span>` : `<span style="color:var(--muted,#888)" data-i18n="ui:✗ USER.md missing">✗ USER.md missing</span>`;
 
   els.wizardBody.innerHTML = `
     <div class="settings-section">
@@ -141,24 +144,24 @@ export function renderMemoryTab() {
     </div>
     <div class="settings-section">
       <h3 class="settings-section-h">${t("smem_context_section")}</h3>
-      <p class="wdesc">Controls how much conversation history is kept in context and when old user turns are archived.</p>
+      <p class="wdesc" data-i18n="ui:Controls how much conversation history is kept in context and when old user turns are archived.">Controls how much conversation history is kept in context and when old user turns are archived.</p>
       <div class="wfield">
         <label>${t("smem_history_budget_label")}</label>
         <input type="number" id="mem-history-budget" min="0" max="200000" step="1000"
                value="${escHtml(String(wizard.historyBudget))}">
-        <div class="wfield-hint">Maximum tokens of conversation history kept in context before compaction triggers. Set 0 to disable compaction by budget.</div>
+        <div class="wfield-hint" data-i18n="ui:Maximum tokens of conversation history kept in context before compaction triggers. Set 0 to disable compaction by budget.">Maximum tokens of conversation history kept in context before compaction triggers. Set 0 to disable compaction by budget.</div>
       </div>
       <div class="wfield">
         <label>${t("smem_compact_threshold_label")}</label>
         <input type="number" id="mem-compact-threshold" min="0.1" max="1.0" step="0.05"
                value="${escHtml(String(wizard.compactThreshold))}">
-        <div class="wfield-hint">Compact when history exceeds this fraction of the history budget (e.g. 0.85 = 85%).</div>
+        <div class="wfield-hint" data-i18n="ui:Compact when history exceeds this fraction of the history budget (e.g. 0.85 = 85%).">Compact when history exceeds this fraction of the history budget (e.g. 0.85 = 85%).</div>
       </div>
       <div class="wfield">
         <label>${t("smem_keep_turns_label")}</label>
         <input type="number" id="mem-compact-keep-turns" min="1" max="50" step="1"
                value="${escHtml(String(wizard.compactKeepTurns))}">
-        <div class="wfield-hint">Always preserve this many most-recent user turns even after compaction.</div>
+        <div class="wfield-hint" data-i18n="ui:Always preserve this many most-recent user turns even after compaction.">Always preserve this many most-recent user turns even after compaction.</div>
       </div>
       <div class="wfield">
         <label>${t("smem_compact_strategy_label")}</label>
@@ -166,40 +169,40 @@ export function renderMemoryTab() {
           <option value="lossless"  ${wizard.compactStrategy === "lossless"  ? "selected" : ""}>lossless — archive to memory store, replace with summary bullets</option>
           <option value="summarize" ${wizard.compactStrategy === "summarize" ? "selected" : ""}>summarize — LLM-generated summary (uses extra tokens)</option>
         </select>
-        <div class="wfield-hint">How old turns are handled when the history budget is exceeded.</div>
+        <div class="wfield-hint" data-i18n="ui:How old turns are handled when the history budget is exceeded.">How old turns are handled when the history budget is exceeded.</div>
       </div>
     </div>
     <div class="settings-section">
       <h3 class="settings-section-h">${t("smem_retrieval_section")}</h3>
-      <p class="wdesc">Controls how memories are scored, retrieved, and injected into each request.</p>
+      <p class="wdesc" data-i18n="ui:Controls how memories are scored, retrieved, and injected into each request.">Controls how memories are scored, retrieved, and injected into each request.</p>
       <div class="wfield">
         <label>${t("smem_min_score_label")}</label>
         <input type="number" id="mem-min-score" min="0" max="1.0" step="0.05"
                value="${escHtml(String(wizard.memoryMinScore))}">
-        <div class="wfield-hint">Memories scoring below this threshold are not injected (0.0–1.0). Lower = more memories recalled.</div>
+        <div class="wfield-hint" data-i18n="ui:Memories scoring below this threshold are not injected (0.0–1.0). Lower = more memories recalled.">Memories scoring below this threshold are not injected (0.0–1.0). Lower = more memories recalled.</div>
       </div>
       <div class="wfield">
         <label>${t("smem_max_tokens_label")}</label>
         <input type="number" id="mem-max-tokens" min="0" max="8000" step="100"
                value="${escHtml(String(wizard.memoryMaxTokens))}">
-        <div class="wfield-hint">Hard cap on tokens spent on injected memories per request. Set 0 for no app-side cap.</div>
+        <div class="wfield-hint" data-i18n="ui:Hard cap on tokens spent on injected memories per request. Set 0 for no app-side cap.">Hard cap on tokens spent on injected memories per request. Set 0 for no app-side cap.</div>
       </div>
       <div class="wfield">
         <label>${t("smem_ret_temp_label")}</label>
         <input type="number" id="mem-retrieval-temp" min="0" max="2.0" step="0.1"
                value="${escHtml(String(wizard.retrievalTemperature))}">
-        <div class="wfield-hint">0.0 = deterministic top-k recall; higher values introduce randomness in which memories surface.</div>
+        <div class="wfield-hint" data-i18n="ui:0.0 = deterministic top-k recall; higher values introduce randomness in which memories surface.">0.0 = deterministic top-k recall; higher values introduce randomness in which memories surface.</div>
       </div>
       <div class="wfield">
         <label>${t("smem_serendipity_label")}</label>
         <input type="number" id="mem-serendipity" min="0" max="1.0" step="0.05"
                value="${escHtml(String(wizard.serendipityBudget))}">
-        <div class="wfield-hint">Fraction of memory token budget filled with random memories. 0.0 = disabled. Encourages surfacing forgotten context.</div>
+        <div class="wfield-hint" data-i18n="ui:Fraction of memory token budget filled with random memories. 0.0 = disabled. Encourages surfacing forgotten context.">Fraction of memory token budget filled with random memories. 0.0 = disabled. Encourages surfacing forgotten context.</div>
       </div>
     </div>
     <div class="settings-section">
       <h3 class="settings-section-h">${t("smem_decay_section")}</h3>
-      <p class="wdesc">Older memories can be down-weighted using exponential decay.</p>
+      <p class="wdesc" data-i18n="ui:Older memories can be down-weighted using exponential decay.">Older memories can be down-weighted using exponential decay.</p>
       <div class="wfield">
         <label>${t("smem_decay_rate_label")}</label>
         <input type="number" id="mem-decay-rate" min="0" max="1.0" step="0.01"
@@ -298,13 +301,13 @@ export function renderIntegrationsTab() {
 
   els.wizardBody.innerHTML = `
     <div class="settings-section integration-guide">
-      <h3 class="settings-section-h">单机接入 · 不需要你申请开发者 ID</h3>
-      <p class="settings-hint">Mac 日历优先复用系统授权：在系统设置 → 互联网账户添加 Google、Exchange 或 iCloud，开启日历；再选择允许 HushClaw 读取的日历。这里不会获取系统账户的密码或令牌。</p>
-      <button id="btn-native-calendar-settings" class="chip-btn">管理本机日历来源</button>
-      <p class="settings-hint">邮箱按服务商要求使用应用专用密码或授权码。账号政策不允许时，使用系统 Mail；不能用普通密码绕过 OAuth。</p>
+      <h3 class="settings-section-h" data-i18n="ui:Standalone access · no personal developer ID needed">单机接入 · 不需要你申请开发者 ID</h3>
+      <p class="settings-hint" data-i18n="ui:On Mac, reuse system calendar authorization: add Google, Exchange or iCloud in System Settings → Internet Accounts and enable calendars, then choose which calendars HushClaw may read. System passwords and tokens are not extracted.">Mac 日历优先复用系统授权：在系统设置 → 互联网账户添加 Google、Exchange 或 iCloud，开启日历；再选择允许 HushClaw 读取的日历。这里不会获取系统账户的密码或令牌。</p>
+      <button id="btn-native-calendar-settings" class="chip-btn" data-i18n="ui:Manage device calendar sources">管理本机日历来源</button>
+      <p class="settings-hint" data-i18n="ui:Use the app password or authorization code required by your mail provider. If account policy disallows it, use system Mail; ordinary passwords cannot bypass OAuth.">邮箱按服务商要求使用应用专用密码或授权码。账号政策不允许时，使用系统 Mail；不能用普通密码绕过 OAuth。</p>
     </div>
     <div class="settings-section">
-      <h3 class="settings-section-h">📧 Email (IMAP/SMTP)</h3>
+      <h3 class="settings-section-h" data-i18n="ui:📧 Email (IMAP/SMTP)">📧 Email (IMAP/SMTP)</h3>
       <p class="settings-hint">
         选择服务商后按下方指引配置。测试只验证登录与邮箱文件夹访问，不会发送邮件。
       </p>
@@ -363,7 +366,7 @@ export function renderIntegrationsTab() {
     </div>
 
     <div class="settings-section">
-      <h3 class="settings-section-h">📅 Calendar (CalDAV)</h3>
+      <h3 class="settings-section-h" data-i18n="ui:📅 Calendar (CalDAV)">📅 Calendar (CalDAV)</h3>
       <p class="settings-hint">
         Requires <code>pip install caldav&gt;=1.3</code> or <code>pip install hushclaw[calendar]</code>.<br>
         ${t("sint_caldav_password_hint")}
@@ -372,11 +375,11 @@ export function renderIntegrationsTab() {
         Google Calendar 不能使用 Gmail 应用密码连接 CalDAV；Mac 推荐使用上方本机日历入口。直接 OAuth 仅适用于发布方已配置的授权服务，或已有自己 OAuth 应用的高级用户。
         <a href="https://developers.google.com/workspace/calendar/caldav/v2/guide" target="_blank" rel="noopener">${t("sint_google_calendar_docs")}</a>
       </p>
-      <button id="btn-google-calendar-settings" class="chip-btn">Google OAuth 高级配置</button>
+      <button id="btn-google-calendar-settings" class="chip-btn" data-i18n="ui:Advanced Google OAuth setup">Google OAuth 高级配置</button>
       ${_renderAccountTabBar(calendarAccounts, currentCalendarTab, "calendar")}
-      ${calendarAccounts.length ? '' : '<p class="settings-hint">暂无日历源，点击 ＋ 添加。保存后移除旧源及已同步的日程副本。</p>'}
+      ${calendarAccounts.length ? '' : '<p class="settings-hint" data-i18n="ui:No calendar sources. Click ＋ to add one. Saving removes old sources and their imported copies.">暂无日历源，点击 ＋ 添加。保存后移除旧源及已同步的日程副本。</p>'}
       <fieldset style="border:0;padding:0;margin:0;min-width:0" ${calendarAccounts.length ? '' : 'hidden disabled'}>
-      <p class="settings-hint">关闭或删除来源并保存后，会清理该来源已同步到 HushClaw 的全部日程；不影响外部日历和手动创建的行程。重新启用后会重新同步。</p>
+      <p class="settings-hint" data-i18n="ui:Disabling or deleting a source and saving clears its imported events from HushClaw. External calendars and manually created events are untouched. Re-enable to sync again.">关闭或删除来源并保存后，会清理该来源已同步到 HushClaw 的全部日程；不影响外部日历和手动创建的行程。重新启用后会重新同步。</p>
       <div class="settings-field">
         <label>${t("sint_quickfill")}</label>
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
@@ -416,7 +419,7 @@ export function renderIntegrationsTab() {
     </div>
 
     <div class="settings-section">
-      <h3 class="settings-section-h">🍎 macOS Native (Mail.app &amp; Calendar.app)</h3>
+      <h3 class="settings-section-h" data-i18n="ui:🍎 macOS Native (Mail.app &amp; Calendar.app)">🍎 macOS Native (Mail.app &amp; Calendar.app)</h3>
       <p class="settings-hint">
         仅 macOS 可用。系统先完成服务商登录，本机日历仍需你明确授权并选择来源。<br>
         系统 Mail 的邮件工具（如 <code>macos_list_emails</code>）需要另行加入工具启用列表，并批准系统自动化权限；不会因选择服务商而自动启用。
@@ -428,7 +431,7 @@ export function renderIntegrationsTab() {
     const guide = emailGuide(document.getElementById("email-imap-host").value);
     document.getElementById("email-auth-guide").innerHTML = `${escHtml(guide.hint)}
       ${guide.action ? `<a href="${escHtml(guide.action)}" target="_blank" rel="noopener noreferrer">${escHtml(guide.actionLabel)}</a>` : ''}
-      ${guide.url ? `<a href="${escHtml(guide.url)}" target="_blank" rel="noopener noreferrer">官方说明 ↗</a>` : ''}`;
+      ${guide.url ? `<a href="${escHtml(guide.url)}" target="_blank" rel="noopener noreferrer" data-i18n="ui:Official instructions ↗">官方说明 ↗</a>` : ''}`;
     document.getElementById("email-credential-label").textContent = guide.credential;
     document.getElementById("email-password").disabled = Boolean(guide.blocked);
     document.getElementById("btn-test-email").disabled = Boolean(guide.blocked);

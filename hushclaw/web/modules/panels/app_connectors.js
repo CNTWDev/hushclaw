@@ -1,3 +1,4 @@
+import { uiText } from "../i18n.js";
 /**
  * panels/app_connectors.js — Unified Connections panel.
  */
@@ -286,8 +287,8 @@ function _renderGroupedCards() {
   return ordered.map((category) => `
     <section class="app-connectors-group">
       <div class="app-connectors-group-head">
-        <h2>${escHtml(category)}</h2>
-        <span>${escHtml(CONNECTION_KIND_DESCRIPTIONS[Object.keys(CONNECTION_KIND_LABELS).find((kind) => CONNECTION_KIND_LABELS[kind] === category)] || `${categories.get(category).length} configured connections`)}</span>
+        <h2>${escHtml(uiText(category))}</h2>
+        <span>${escHtml(uiText(CONNECTION_KIND_DESCRIPTIONS[Object.keys(CONNECTION_KIND_LABELS).find((kind) => CONNECTION_KIND_LABELS[kind] === category)] || uiText("{n} configured connections", {n: categories.get(category).length})))}</span>
       </div>
       <div class="app-connectors-grid${categories.get(category).length ? "" : " hidden"}">
         ${categories.get(category).map((item) => _renderCard(item)).join("")}
@@ -302,14 +303,14 @@ function _renderPlannedConnectors(category) {
   if (!planned.length) return "";
   return `
     <div class="app-connectors-planned">
-      <div class="app-connectors-planned-title">Planned platform-specific connectors</div>
+      <div class="app-connectors-planned-title" data-i18n="ui:Planned platform-specific connectors">Planned platform-specific connectors</div>
       <div class="app-connectors-planned-grid">
         ${planned.map((item) => `
           <div class="app-connector-planned-card">
             <div class="app-connector-planned-name">${escHtml(item.name)}</div>
-            <div class="app-connector-planned-note">${escHtml(item.note)}</div>
+            <div class="app-connector-planned-note">${escHtml(uiText(item.note))}</div>
             <div class="app-connector-chips">
-              ${item.capabilities.map((cap) => `<span>${escHtml(cap)}</span>`).join("")}
+              ${item.capabilities.map((cap) => `<span>${escHtml(uiText(cap))}</span>`).join("")}
             </div>
           </div>
         `).join("")}
@@ -328,7 +329,7 @@ function _renderCard(item) {
     ? `<span class="app-connector-meta-chip">${escHtml(meta.render_mode_label)}</span>`
     : "";
   const streamingChip = item.kind === "channel" && meta.stream
-    ? '<span class="app-connector-meta-chip">Streaming</span>'
+    ? '<span class="app-connector-meta-chip" data-i18n="ui:Streaming">Streaming</span>'
     : "";
   return `
     <button class="app-connector-card app-connector-card-${escHtml(item.brand || item.id)}"
@@ -337,11 +338,11 @@ function _renderCard(item) {
         <div class="app-connector-card-top">
           <span class="app-connector-mark" aria-hidden="true">${_connectorIcon(item.icon || item.provider || item.brand)}</span>
           <div class="app-connector-title-block">
-            <span class="app-connector-card-type">${escHtml(_kindEmoji(item.kind))} ${escHtml(kindLabel)}</span>
+            <span class="app-connector-card-type">${escHtml(_kindEmoji(item.kind))} ${escHtml(uiText(kindLabel))}</span>
             <span class="app-connector-card-name">${escHtml(item.name)}</span>
           </div>
         </div>
-        <span class="app-connector-status ${escHtml(statusInfo.className)}">${escHtml(statusInfo.label)}</span>
+        <span class="app-connector-status ${escHtml(statusInfo.className)}">${escHtml(uiText(statusInfo.label))}</span>
       </div>
       <div class="app-connector-card-body">
         <div class="app-connector-provider-row">
@@ -355,11 +356,11 @@ function _renderCard(item) {
         </div>
         <div class="app-connector-card-desc">${escHtml(item.description || item.tagline || "")}</div>
         <div class="app-connector-chips">
-          ${(item.capabilities || []).map((cap) => `<span>${escHtml(cap)}</span>`).join("")}
+          ${(item.capabilities || []).map((cap) => `<span>${escHtml(uiText(cap))}</span>`).join("")}
         </div>
       </div>
       <div class="app-connector-card-footer">
-        <span>${escHtml(footerLabel)}</span>
+        <span>${escHtml(uiText(footerLabel))}</span>
         <span aria-hidden="true">→</span>
       </div>
     </button>
@@ -376,9 +377,9 @@ function _renderGitHubConfigModal() {
     <div class="app-connector-modal">
       <div class="app-connector-modal-summary">
         <div>
-          <div class="app-connector-kicker">Built-in GitHub connector</div>
-          <h2>Repository search and read tools</h2>
-          <p>This connector is shipped by HushClaw. Users connect an account and repository; they do not create connector code here.</p>
+          <div class="app-connector-kicker" data-i18n="ui:Built-in GitHub connector">Built-in GitHub connector</div>
+          <h2 data-i18n="ui:Repository search and read tools">Repository search and read tools</h2>
+          <p data-i18n="ui:This connector is shipped by HushClaw. Users connect an account and repository; they do not create connector code here.">This connector is shipped by HushClaw. Users connect an account and repository; they do not create connector code here.</p>
         </div>
         <label class="toggle">
           <input type="checkbox" id="app-github-enabled" ${gh.enabled ? "checked" : ""}>
@@ -388,75 +389,75 @@ function _renderGitHubConfigModal() {
 
       <div class="app-connector-info-grid">
         <div>
-          <span>Runtime</span>
-          <strong>Read-only GitHub REST adapter</strong>
+          <span data-i18n="ui:Runtime">Runtime</span>
+          <strong data-i18n="ui:Read-only GitHub REST adapter">Read-only GitHub REST adapter</strong>
         </div>
         <div>
-          <span>Registered tools</span>
+          <span data-i18n="ui:Registered tools">Registered tools</span>
           <strong>github_search, github_read</strong>
         </div>
         <div>
-          <span>Activation</span>
-          <strong>New chat sessions after save</strong>
+          <span data-i18n="ui:Activation">Activation</span>
+          <strong data-i18n="ui:New chat sessions after save">New chat sessions after save</strong>
         </div>
       </div>
 
       ${_renderOAuthConnectBlock("github", oauthReady, gh.token_set, "Connect GitHub")}
 
       <details class="app-connector-advanced">
-        <summary>Advanced manual configuration</summary>
+        <summary data-i18n="ui:Advanced manual configuration">Advanced manual configuration</summary>
       <div class="app-connector-form-grid">
         <label class="settings-field">
-          <span>Authorization mode</span>
+          <span data-i18n="ui:Authorization mode">Authorization mode</span>
           <select id="app-github-auth-mode">
-            <option value="managed" ${gh.auth_mode === "managed" ? "selected" : ""}>Managed by HushClaw broker</option>
-            <option value="custom" ${gh.auth_mode === "custom" ? "selected" : ""}>Custom OAuth app / token</option>
+            <option value="managed" ${gh.auth_mode === "managed" ? "selected" : ""} data-i18n="ui:Managed by HushClaw broker">Managed by HushClaw broker</option>
+            <option value="custom" ${gh.auth_mode === "custom" ? "selected" : ""} data-i18n="ui:Custom OAuth app / token">Custom OAuth app / token</option>
           </select>
         </label>
         <label class="settings-field">
-          <span>Auth type</span>
+          <span data-i18n="ui:Auth type">Auth type</span>
           <select id="app-github-auth-type">
-            <option value="pat" ${gh.auth_type === "pat" ? "selected" : ""}>Fine-grained token</option>
+            <option value="pat" ${gh.auth_type === "pat" ? "selected" : ""} data-i18n="ui:Fine-grained token">Fine-grained token</option>
             <option value="oauth" ${gh.auth_type === "oauth" ? "selected" : ""}>OAuth</option>
           </select>
         </label>
         <label class="settings-field">
-          <span>Default repository</span>
+          <span data-i18n="ui:Default repository">Default repository</span>
           <input id="app-github-default-repo" type="text" value="${escHtml(gh.default_repo || "")}" placeholder="owner/repo">
         </label>
       </div>
 
       <div class="app-connector-form-grid">
         <label class="settings-field">
-          <span>OAuth client ID</span>
+          <span data-i18n="ui:OAuth client ID">OAuth client ID</span>
           <input id="app-github-client-id" type="password" value="" placeholder="${escHtml(_secretPlaceholder(gh.client_id_set, "GitHub OAuth client ID"))}">
         </label>
         <label class="settings-field">
-          <span>OAuth client ID reference</span>
+          <span data-i18n="ui:OAuth client ID reference">OAuth client ID reference</span>
           <input id="app-github-client-id-ref" type="text" value="${escHtml(gh.client_id_ref || "app_connectors.github.client_id")}" placeholder="app_connectors.github.client_id">
         </label>
       </div>
 
       <div class="app-connector-form-grid">
         <label class="settings-field">
-          <span>OAuth client secret</span>
+          <span data-i18n="ui:OAuth client secret">OAuth client secret</span>
           <input id="app-github-client-secret" type="password" value="" placeholder="${escHtml(_secretPlaceholder(gh.client_secret_set, "GitHub OAuth client secret"))}">
         </label>
         <label class="settings-field">
-          <span>OAuth client secret reference</span>
+          <span data-i18n="ui:OAuth client secret reference">OAuth client secret reference</span>
           <input id="app-github-client-secret-ref" type="text" value="${escHtml(gh.client_secret_ref || "app_connectors.github.client_secret")}" placeholder="app_connectors.github.client_secret">
         </label>
       </div>
 
       <div class="app-connector-form-grid">
         <label class="settings-field">
-          <span>Secret reference</span>
+          <span data-i18n="ui:Secret reference">Secret reference</span>
           <input id="app-github-token-ref" type="text" value="${escHtml(gh.token_ref || "app_connectors.github.token")}" placeholder="app_connectors.github.token">
         </label>
       </div>
 
       <label class="settings-field">
-        <span>Access token</span>
+        <span data-i18n="ui:Access token">Access token</span>
         <input id="app-github-token" type="password" value="" placeholder="${escHtml(tokenPlaceholder)}">
         <span class="settings-hint">${escHtml(tokenState)}. Use a read-only fine-grained token with repository metadata/content/issues permissions as needed.</span>
       </label>
@@ -468,8 +469,8 @@ function _renderGitHubConfigModal() {
       </details>
 
       <div class="app-connector-actions">
-        <button id="btn-save-app-github">Save connector</button>
-        <button id="btn-test-app-github" class="secondary">Test connection</button>
+        <button id="btn-save-app-github" data-i18n="ui:Save connector">Save connector</button>
+        <button id="btn-test-app-github" class="secondary" data-i18n="ui:Test connection">Test connection</button>
         <span id="app-connector-modal-save-status">${_statusText(appConnectorsPanel.saveStatusType, appConnectorsPanel.saveStatus)}</span>
         <span id="app-connector-modal-test-status">${_statusText(appConnectorsPanel.testStatusType, appConnectorsPanel.testStatus)}</span>
       </div>
@@ -520,15 +521,15 @@ function _commonInfoGrid(item, ownership = "Provided by HushClaw, not user-creat
   return `
     <div class="app-connector-info-grid">
       <div>
-        <span>Runtime</span>
+        <span data-i18n="ui:Runtime">Runtime</span>
         <strong>${escHtml(item.runtime)}</strong>
       </div>
       <div>
-        <span>Authentication</span>
+        <span data-i18n="ui:Authentication">Authentication</span>
         <strong>${escHtml(item.auth)}</strong>
       </div>
       <div>
-        <span>Connector ownership</span>
+        <span data-i18n="ui:Connector ownership">Connector ownership</span>
         <strong>${escHtml(ownership)}</strong>
       </div>
     </div>
@@ -551,65 +552,65 @@ function _renderGoogleWorkspaceConfigModal(item) {
       </label>
 
       <details class="app-connector-advanced">
-        <summary>Advanced OAuth and token configuration</summary>
+        <summary data-i18n="ui:Advanced OAuth and token configuration">Advanced OAuth and token configuration</summary>
         <p class="settings-hint">OAuth redirect URI: <code>${escHtml(`${location.origin}/oauth/app-connectors/google_workspace/callback`)}</code></p>
       <div class="app-connector-form-grid">
         <label class="settings-field">
-          <span>Authorization mode</span>
+          <span data-i18n="ui:Authorization mode">Authorization mode</span>
           <select id="app-google-workspace-auth-mode">
-            <option value="managed" ${c.auth_mode === "managed" ? "selected" : ""}>Managed by HushClaw broker</option>
-            <option value="custom" ${c.auth_mode === "custom" ? "selected" : ""}>Custom OAuth app</option>
+            <option value="managed" ${c.auth_mode === "managed" ? "selected" : ""} data-i18n="ui:Managed by HushClaw broker">Managed by HushClaw broker</option>
+            <option value="custom" ${c.auth_mode === "custom" ? "selected" : ""} data-i18n="ui:Custom OAuth app">Custom OAuth app</option>
           </select>
           <span class="settings-hint">${t("sint_google_calendar_custom_hint")}</span>
         </label>
         <label class="settings-field">
-          <span>Auth type</span>
+          <span data-i18n="ui:Auth type">Auth type</span>
           <select id="app-google-workspace-auth-type">
             <option value="oauth" ${c.auth_type === "oauth" ? "selected" : ""}>OAuth 2.0</option>
           </select>
         </label>
         <label class="settings-field">
-          <span>Scopes</span>
+          <span data-i18n="ui:Scopes">Scopes</span>
           <input id="app-google-workspace-scopes" type="text" value="${escHtml((c.scopes || []).join(" "))}" placeholder="https://www.googleapis.com/auth/calendar.readonly">
         </label>
       </div>
 
       <div class="app-connector-form-grid">
         <label class="settings-field">
-          <span>Client ID</span>
+          <span data-i18n="ui:Client ID">Client ID</span>
           <input id="app-google-workspace-client-id" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.client_id_set, "OAuth client ID"))}">
         </label>
         <label class="settings-field">
-          <span>Client ID secret reference</span>
+          <span data-i18n="ui:Client ID secret reference">Client ID secret reference</span>
           <input id="app-google-workspace-client-id-ref" type="text" value="${escHtml(c.client_id_ref)}">
         </label>
       </div>
 
       <div class="app-connector-form-grid">
         <label class="settings-field">
-          <span>Client secret</span>
+          <span data-i18n="ui:Client secret">Client secret</span>
           <input id="app-google-workspace-client-secret" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.client_secret_set, "OAuth client secret"))}">
         </label>
         <label class="settings-field">
-          <span>Client secret reference</span>
+          <span data-i18n="ui:Client secret reference">Client secret reference</span>
           <input id="app-google-workspace-client-secret-ref" type="text" value="${escHtml(c.client_secret_ref)}">
         </label>
       </div>
 
       <div class="app-connector-info-grid">
-        <div><span>Access token</span><strong>${c.access_token_set ? "Stored" : "Not stored"}</strong></div>
-        <div><span>Refresh token</span><strong>${c.refresh_token_set ? "Stored" : "Not stored"}</strong></div>
-        <div><span>Calendar sync</span><strong>Read-only</strong></div>
+        <div><span data-i18n="ui:Access token">Access token</span><strong>${c.access_token_set ? "Stored" : "Not stored"}</strong></div>
+        <div><span data-i18n="ui:Refresh token">Refresh token</span><strong>${c.refresh_token_set ? "Stored" : "Not stored"}</strong></div>
+        <div><span data-i18n="ui:Calendar sync">Calendar sync</span><strong data-i18n="ui:Read-only">Read-only</strong></div>
       </div>
 
       <div class="app-connector-form-grid">
         <label class="settings-field">
-          <span>Access token</span>
+          <span data-i18n="ui:Access token">Access token</span>
           <input id="app-google-workspace-access-token" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.access_token_set, "OAuth access token"))}">
           <input id="app-google-workspace-access-token-ref" type="hidden" value="${escHtml(c.access_token_ref)}">
         </label>
         <label class="settings-field">
-          <span>Refresh token</span>
+          <span data-i18n="ui:Refresh token">Refresh token</span>
           <input id="app-google-workspace-refresh-token" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.refresh_token_set, "OAuth refresh token"))}">
           <input id="app-google-workspace-refresh-token-ref" type="hidden" value="${escHtml(c.refresh_token_ref)}">
         </label>
@@ -631,57 +632,57 @@ function _renderNotionConfigModal(item) {
       ${_renderOAuthConnectBlock("notion", oauthReady, c.token_set, "Connect Notion")}
 
       <details class="app-connector-advanced">
-        <summary>Advanced OAuth and token configuration</summary>
+        <summary data-i18n="ui:Advanced OAuth and token configuration">Advanced OAuth and token configuration</summary>
       <div class="app-connector-form-grid">
         <label class="settings-field">
-          <span>Authorization mode</span>
+          <span data-i18n="ui:Authorization mode">Authorization mode</span>
           <select id="app-notion-auth-mode">
-            <option value="managed" ${c.auth_mode === "managed" ? "selected" : ""}>Managed by HushClaw broker</option>
-            <option value="custom" ${c.auth_mode === "custom" ? "selected" : ""}>Custom OAuth app / token</option>
+            <option value="managed" ${c.auth_mode === "managed" ? "selected" : ""} data-i18n="ui:Managed by HushClaw broker">Managed by HushClaw broker</option>
+            <option value="custom" ${c.auth_mode === "custom" ? "selected" : ""} data-i18n="ui:Custom OAuth app / token">Custom OAuth app / token</option>
           </select>
         </label>
         <label class="settings-field">
-          <span>Auth type</span>
+          <span data-i18n="ui:Auth type">Auth type</span>
           <select id="app-notion-auth-type">
-            <option value="internal_token" ${c.auth_type === "internal_token" ? "selected" : ""}>Internal integration token</option>
-            <option value="oauth" ${c.auth_type === "oauth" ? "selected" : ""}>OAuth token</option>
+            <option value="internal_token" ${c.auth_type === "internal_token" ? "selected" : ""} data-i18n="ui:Internal integration token">Internal integration token</option>
+            <option value="oauth" ${c.auth_type === "oauth" ? "selected" : ""} data-i18n="ui:OAuth token">OAuth token</option>
           </select>
         </label>
         <label class="settings-field">
-          <span>Workspace label</span>
+          <span data-i18n="ui:Workspace label">Workspace label</span>
           <input id="app-notion-workspace-name" type="text" value="${escHtml(c.workspace_name || "")}" placeholder="Product wiki">
         </label>
       </div>
 
       <div class="app-connector-form-grid">
         <label class="settings-field">
-          <span>OAuth client ID</span>
+          <span data-i18n="ui:OAuth client ID">OAuth client ID</span>
           <input id="app-notion-client-id" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.client_id_set, "Notion OAuth client ID"))}">
         </label>
         <label class="settings-field">
-          <span>OAuth client ID reference</span>
+          <span data-i18n="ui:OAuth client ID reference">OAuth client ID reference</span>
           <input id="app-notion-client-id-ref" type="text" value="${escHtml(c.client_id_ref || "app_connectors.notion.client_id")}">
         </label>
       </div>
 
       <div class="app-connector-form-grid">
         <label class="settings-field">
-          <span>OAuth client secret</span>
+          <span data-i18n="ui:OAuth client secret">OAuth client secret</span>
           <input id="app-notion-client-secret" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.client_secret_set, "Notion OAuth client secret"))}">
         </label>
         <label class="settings-field">
-          <span>OAuth client secret reference</span>
+          <span data-i18n="ui:OAuth client secret reference">OAuth client secret reference</span>
           <input id="app-notion-client-secret-ref" type="text" value="${escHtml(c.client_secret_ref || "app_connectors.notion.client_secret")}">
         </label>
       </div>
 
       <div class="app-connector-form-grid">
         <label class="settings-field">
-          <span>Notion token</span>
+          <span data-i18n="ui:Notion token">Notion token</span>
           <input id="app-notion-token" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.token_set, "Notion integration token"))}">
         </label>
         <label class="settings-field">
-          <span>Token secret reference</span>
+          <span data-i18n="ui:Token secret reference">Token secret reference</span>
           <input id="app-notion-token-ref" type="text" value="${escHtml(c.token_ref)}">
         </label>
       </div>
@@ -702,72 +703,72 @@ function _renderJiraConfigModal(item) {
       ${_renderOAuthConnectBlock("jira", oauthReady, c.access_token_set || c.token_set, "Connect Jira")}
 
       <details class="app-connector-advanced">
-        <summary>Advanced OAuth and token configuration</summary>
+        <summary data-i18n="ui:Advanced OAuth and token configuration">Advanced OAuth and token configuration</summary>
       <div class="app-connector-form-grid">
         <label class="settings-field">
-          <span>Authorization mode</span>
+          <span data-i18n="ui:Authorization mode">Authorization mode</span>
           <select id="app-jira-auth-mode">
-            <option value="managed" ${c.auth_mode === "managed" ? "selected" : ""}>Managed by HushClaw broker</option>
-            <option value="custom" ${c.auth_mode === "custom" ? "selected" : ""}>Custom OAuth app / token</option>
+            <option value="managed" ${c.auth_mode === "managed" ? "selected" : ""} data-i18n="ui:Managed by HushClaw broker">Managed by HushClaw broker</option>
+            <option value="custom" ${c.auth_mode === "custom" ? "selected" : ""} data-i18n="ui:Custom OAuth app / token">Custom OAuth app / token</option>
           </select>
         </label>
         <label class="settings-field">
-          <span>Auth type</span>
+          <span data-i18n="ui:Auth type">Auth type</span>
           <select id="app-jira-auth-type">
-            <option value="api_token" ${c.auth_type === "api_token" ? "selected" : ""}>API token</option>
-            <option value="oauth" ${c.auth_type === "oauth" ? "selected" : ""}>OAuth access token</option>
+            <option value="api_token" ${c.auth_type === "api_token" ? "selected" : ""} data-i18n="ui:API token">API token</option>
+            <option value="oauth" ${c.auth_type === "oauth" ? "selected" : ""} data-i18n="ui:OAuth access token">OAuth access token</option>
           </select>
         </label>
         <label class="settings-field">
-          <span>Jira site URL</span>
+          <span data-i18n="ui:Jira site URL">Jira site URL</span>
           <input id="app-jira-site-url" type="text" value="${escHtml(c.site_url || "")}" placeholder="https://your-domain.atlassian.net">
         </label>
       </div>
 
       <div class="app-connector-form-grid">
         <label class="settings-field">
-          <span>Account email</span>
+          <span data-i18n="ui:Account email">Account email</span>
           <input id="app-jira-email" type="text" value="${escHtml(c.email || "")}" placeholder="you@example.com">
         </label>
         <label class="settings-field">
-          <span>Cloud ID</span>
+          <span data-i18n="ui:Cloud ID">Cloud ID</span>
           <input id="app-jira-cloud-id" type="text" value="${escHtml(c.cloud_id || "")}" placeholder="Optional for OAuth">
         </label>
       </div>
 
       <div class="app-connector-form-grid">
         <label class="settings-field">
-          <span>OAuth client ID</span>
+          <span data-i18n="ui:OAuth client ID">OAuth client ID</span>
           <input id="app-jira-client-id" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.client_id_set, "Atlassian OAuth client ID"))}">
           <input id="app-jira-client-id-ref" type="hidden" value="${escHtml(c.client_id_ref || "app_connectors.jira.client_id")}">
         </label>
         <label class="settings-field">
-          <span>OAuth client secret</span>
+          <span data-i18n="ui:OAuth client secret">OAuth client secret</span>
           <input id="app-jira-client-secret" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.client_secret_set, "Atlassian OAuth client secret"))}">
           <input id="app-jira-client-secret-ref" type="hidden" value="${escHtml(c.client_secret_ref || "app_connectors.jira.client_secret")}">
         </label>
       </div>
 
       <label class="settings-field">
-        <span>OAuth scopes</span>
+        <span data-i18n="ui:OAuth scopes">OAuth scopes</span>
         <input id="app-jira-scopes" type="text" value="${escHtml((c.scopes || []).join(" "))}" placeholder="read:jira-work read:jira-user offline_access">
       </label>
 
       <div class="app-connector-form-grid">
         <label class="settings-field">
-          <span>API token</span>
+          <span data-i18n="ui:API token">API token</span>
           <input id="app-jira-token" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.token_set, "Jira API token"))}">
           <input id="app-jira-token-ref" type="hidden" value="${escHtml(c.token_ref)}">
         </label>
         <label class="settings-field">
-          <span>OAuth access token</span>
+          <span data-i18n="ui:OAuth access token">OAuth access token</span>
           <input id="app-jira-access-token" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.access_token_set, "OAuth access token"))}">
           <input id="app-jira-access-token-ref" type="hidden" value="${escHtml(c.access_token_ref)}">
         </label>
       </div>
 
       <label class="settings-field">
-        <span>OAuth refresh token</span>
+        <span data-i18n="ui:OAuth refresh token">OAuth refresh token</span>
         <input id="app-jira-refresh-token" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.refresh_token_set, "OAuth refresh token"))}">
         <input id="app-jira-refresh-token-ref" type="hidden" value="${escHtml(c.refresh_token_ref || "app_connectors.jira.refresh_token")}">
       </label>
@@ -786,28 +787,28 @@ function _renderRedditConfigModal(item) {
       ${_commonInfoGrid(item, "Official Reddit OAuth API adapter")}
 
       <div class="app-connector-info-grid">
-        <div><span>Registered tools</span><strong>reddit_search, reddit_read</strong></div>
-        <div><span>Write tools</span><strong>reddit_post, reddit_comment</strong></div>
-        <div><span>Write guard</span><strong>allow_actions required</strong></div>
+        <div><span data-i18n="ui:Registered tools">Registered tools</span><strong>reddit_search, reddit_read</strong></div>
+        <div><span data-i18n="ui:Write tools">Write tools</span><strong>reddit_post, reddit_comment</strong></div>
+        <div><span data-i18n="ui:Write guard">Write guard</span><strong data-i18n="ui:allow_actions required">allow_actions required</strong></div>
       </div>
 
       <details class="app-connector-advanced" open>
-        <summary>OAuth token configuration</summary>
+        <summary data-i18n="ui:OAuth token configuration">OAuth token configuration</summary>
         <div class="app-connector-form-grid">
           <label class="settings-field">
-            <span>Authorization mode</span>
+            <span data-i18n="ui:Authorization mode">Authorization mode</span>
             <select id="app-reddit-auth-mode">
-              <option value="custom" ${c.auth_mode === "custom" ? "selected" : ""}>Custom Reddit OAuth app</option>
+              <option value="custom" ${c.auth_mode === "custom" ? "selected" : ""} data-i18n="ui:Custom Reddit OAuth app">Custom Reddit OAuth app</option>
             </select>
           </label>
           <label class="settings-field">
-            <span>Auth type</span>
+            <span data-i18n="ui:Auth type">Auth type</span>
             <select id="app-reddit-auth-type">
-              <option value="oauth" ${c.auth_type === "oauth" ? "selected" : ""}>OAuth access token</option>
+              <option value="oauth" ${c.auth_type === "oauth" ? "selected" : ""} data-i18n="ui:OAuth access token">OAuth access token</option>
             </select>
           </label>
           <label class="settings-field">
-            <span>Default subreddit</span>
+            <span data-i18n="ui:Default subreddit">Default subreddit</span>
             <input id="app-reddit-default-subreddit" type="text" value="${escHtml(c.default_subreddit || "")}" placeholder="hushclaw">
           </label>
         </div>
@@ -815,17 +816,17 @@ function _renderRedditConfigModal(item) {
         <label class="settings-field">
           <span>User-Agent</span>
           <input id="app-reddit-user-agent" type="text" value="${escHtml(c.user_agent || "HushClaw-AppConnector/1.0")}" placeholder="platform:app:version (by /u/name)">
-          <span class="settings-hint">Reddit expects a descriptive User-Agent for API clients.</span>
+          <span class="settings-hint" data-i18n="ui:Reddit expects a descriptive User-Agent for API clients.">Reddit expects a descriptive User-Agent for API clients.</span>
         </label>
 
         <div class="app-connector-form-grid">
           <label class="settings-field">
-            <span>Client ID</span>
+            <span data-i18n="ui:Client ID">Client ID</span>
             <input id="app-reddit-client-id" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.client_id_set, "Reddit app client ID"))}">
             <input id="app-reddit-client-id-ref" type="hidden" value="${escHtml(c.client_id_ref || "app_connectors.reddit.client_id")}">
           </label>
           <label class="settings-field">
-            <span>Client secret</span>
+            <span data-i18n="ui:Client secret">Client secret</span>
             <input id="app-reddit-client-secret" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.client_secret_set, "Reddit app client secret"))}">
             <input id="app-reddit-client-secret-ref" type="hidden" value="${escHtml(c.client_secret_ref || "app_connectors.reddit.client_secret")}">
           </label>
@@ -833,12 +834,12 @@ function _renderRedditConfigModal(item) {
 
         <div class="app-connector-form-grid">
           <label class="settings-field">
-            <span>Access token</span>
+            <span data-i18n="ui:Access token">Access token</span>
             <input id="app-reddit-access-token" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.access_token_set, "Reddit OAuth access token"))}">
             <input id="app-reddit-access-token-ref" type="hidden" value="${escHtml(c.access_token_ref || "app_connectors.reddit.access_token")}">
           </label>
           <label class="settings-field">
-            <span>Refresh token</span>
+            <span data-i18n="ui:Refresh token">Refresh token</span>
             <input id="app-reddit-refresh-token" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.refresh_token_set, "Reddit OAuth refresh token"))}">
             <input id="app-reddit-refresh-token-ref" type="hidden" value="${escHtml(c.refresh_token_ref || "app_connectors.reddit.refresh_token")}">
           </label>
@@ -846,7 +847,7 @@ function _renderRedditConfigModal(item) {
 
         <label class="settings-field">
           <span><input type="checkbox" id="app-reddit-allow-actions" ${c.allow_actions ? "checked" : ""}> Enable post/comment actions</span>
-          <span class="settings-hint">Read tools work without this. Posting and commenting are blocked until this is enabled.</span>
+          <span class="settings-hint" data-i18n="ui:Read tools work without this. Posting and commenting are blocked until this is enabled.">Read tools work without this. Posting and commenting are blocked until this is enabled.</span>
         </label>
       </details>
 
@@ -865,50 +866,50 @@ function _renderXConfigModal(item) {
       ${_commonInfoGrid(item, "Official X API v2 adapter")}
 
       <div class="app-connector-info-grid">
-        <div><span>Registered tools</span><strong>x_search, x_read_post</strong></div>
-        <div><span>Write tools</span><strong>x_post, x_reply</strong></div>
-        <div><span>Stream</span><strong>Filtered Stream → Local events</strong></div>
-        <div><span>Write guard</span><strong>Draft confirmation by default</strong></div>
+        <div><span data-i18n="ui:Registered tools">Registered tools</span><strong>x_search, x_read_post</strong></div>
+        <div><span data-i18n="ui:Write tools">Write tools</span><strong>x_post, x_reply</strong></div>
+        <div><span data-i18n="ui:Stream">Stream</span><strong data-i18n="ui:Filtered Stream → Local events">Filtered Stream → Local events</strong></div>
+        <div><span data-i18n="ui:Write guard">Write guard</span><strong data-i18n="ui:Draft confirmation by default">Draft confirmation by default</strong></div>
       </div>
 
       <div class="app-connector-oauth-panel">
         <div>
-          <span>X Developer Portal URLs</span>
+          <span data-i18n="ui:X Developer Portal URLs">X Developer Portal URLs</span>
           <strong>Callback URL: ${escHtml(callbackUrl)}</strong>
           <p>Website URL: ${escHtml(websiteUrl)}</p>
-          <p>In X Developer Portal, enable OAuth 2.0, set App permissions to Read and write, use Web App / confidential client, and add these exact URLs. The OAuth 2.0 Client ID is different from the Consumer Key.</p>
+          <p data-i18n="ui:In X Developer Portal, enable OAuth 2.0, set App permissions to Read and write, use Web App / confidential client, and add these exact URLs. The OAuth 2.0 Client ID is different from the Consumer Key.">In X Developer Portal, enable OAuth 2.0, set App permissions to Read and write, use Web App / confidential client, and add these exact URLs. The OAuth 2.0 Client ID is different from the Consumer Key.</p>
         </div>
       </div>
 
       ${_renderOAuthConnectBlock("x", Boolean(c.oauth_client_id_set || c.oauth_client_id), c.access_token_set, "Connect X user OAuth")}
 
       <details class="app-connector-advanced" open>
-        <summary>API token configuration</summary>
+        <summary data-i18n="ui:API token configuration">API token configuration</summary>
         <div class="app-connector-form-grid">
           <label class="settings-field">
-            <span>Authorization mode</span>
+            <span data-i18n="ui:Authorization mode">Authorization mode</span>
             <select id="app-x-auth-mode">
-              <option value="custom" ${(c.auth_mode || "custom") === "custom" ? "selected" : ""}>Local OAuth 2.0 PKCE</option>
-              <option value="managed" ${c.auth_mode === "managed" ? "selected" : ""}>Managed broker</option>
+              <option value="custom" ${(c.auth_mode || "custom") === "custom" ? "selected" : ""} data-i18n="ui:Local OAuth 2.0 PKCE">Local OAuth 2.0 PKCE</option>
+              <option value="managed" ${c.auth_mode === "managed" ? "selected" : ""} data-i18n="ui:Managed broker">Managed broker</option>
             </select>
           </label>
           <label class="settings-field">
-            <span>Auth type</span>
+            <span data-i18n="ui:Auth type">Auth type</span>
             <select id="app-x-auth-type">
-              <option value="app_keys" ${c.auth_type === "app_keys" ? "selected" : ""}>App keys + Bearer token</option>
-              <option value="oauth2_user" ${c.auth_type === "oauth2_user" ? "selected" : ""}>OAuth 2.0 user token</option>
+              <option value="app_keys" ${c.auth_type === "app_keys" ? "selected" : ""} data-i18n="ui:App keys + Bearer token">App keys + Bearer token</option>
+              <option value="oauth2_user" ${c.auth_type === "oauth2_user" ? "selected" : ""} data-i18n="ui:OAuth 2.0 user token">OAuth 2.0 user token</option>
             </select>
           </label>
         </div>
 
         <div class="app-connector-form-grid">
           <label class="settings-field">
-            <span>Consumer Key</span>
+            <span data-i18n="ui:Consumer Key">Consumer Key</span>
             <input id="app-x-consumer-key" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.consumer_key_set, "X Consumer Key"))}">
             <input id="app-x-consumer-key-ref" type="hidden" value="${escHtml(c.consumer_key_ref || "app_connectors.x.consumer_key")}">
           </label>
           <label class="settings-field">
-            <span>Consumer Secret</span>
+            <span data-i18n="ui:Consumer Secret">Consumer Secret</span>
             <input id="app-x-consumer-secret" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.consumer_secret_set, "X Consumer Secret"))}">
             <input id="app-x-consumer-secret-ref" type="hidden" value="${escHtml(c.consumer_secret_ref || "app_connectors.x.consumer_secret")}">
           </label>
@@ -916,31 +917,31 @@ function _renderXConfigModal(item) {
 
         <div class="app-connector-form-grid">
           <label class="settings-field">
-            <span>OAuth 2.0 Client ID</span>
+            <span data-i18n="ui:OAuth 2.0 Client ID">OAuth 2.0 Client ID</span>
             <input id="app-x-oauth-client-id" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.oauth_client_id_set, "X OAuth 2.0 Client ID"))}">
             <input id="app-x-oauth-client-id-ref" type="hidden" value="${escHtml(c.oauth_client_id_ref || "app_connectors.x.oauth_client_id")}">
           </label>
           <label class="settings-field">
-            <span>OAuth 2.0 Client Secret</span>
+            <span data-i18n="ui:OAuth 2.0 Client Secret">OAuth 2.0 Client Secret</span>
             <input id="app-x-oauth-client-secret" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.oauth_client_secret_set, "X OAuth 2.0 Client Secret"))}">
             <input id="app-x-oauth-client-secret-ref" type="hidden" value="${escHtml(c.oauth_client_secret_ref || "app_connectors.x.oauth_client_secret")}">
           </label>
         </div>
 
         <label class="settings-field">
-          <span>Bearer token</span>
+          <span data-i18n="ui:Bearer token">Bearer token</span>
           <input id="app-x-bearer-token" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.bearer_token_set, "X bearer token for read tools"))}">
           <input id="app-x-bearer-token-ref" type="hidden" value="${escHtml(c.bearer_token_ref || "app_connectors.x.bearer_token")}">
         </label>
 
         <div class="app-connector-form-grid">
           <label class="settings-field">
-            <span>OAuth access token</span>
+            <span data-i18n="ui:OAuth access token">OAuth access token</span>
             <input id="app-x-access-token" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.access_token_set, "X OAuth access token"))}">
             <input id="app-x-access-token-ref" type="hidden" value="${escHtml(c.access_token_ref || "app_connectors.x.access_token")}">
           </label>
           <label class="settings-field">
-            <span>OAuth refresh token</span>
+            <span data-i18n="ui:OAuth refresh token">OAuth refresh token</span>
             <input id="app-x-refresh-token" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.refresh_token_set, "X OAuth refresh token"))}">
             <input id="app-x-refresh-token-ref" type="hidden" value="${escHtml(c.refresh_token_ref || "app_connectors.x.refresh_token")}">
           </label>
@@ -948,21 +949,21 @@ function _renderXConfigModal(item) {
 
         <label class="settings-field">
           <span><input type="checkbox" id="app-x-allow-actions" ${c.allow_actions ? "checked" : ""}> Enable post/reply actions</span>
-          <span class="settings-hint">Consumer Key/Secret and Bearer Token match the X Developer Portal keys. Posting and replying also require a user-context access token and this setting.</span>
+          <span class="settings-hint" data-i18n="ui:Consumer Key/Secret and Bearer Token match the X Developer Portal keys. Posting and replying also require a user-context access token and this setting.">Consumer Key/Secret and Bearer Token match the X Developer Portal keys. Posting and replying also require a user-context access token and this setting.</span>
         </label>
 
       </details>
 
       <details class="app-connector-advanced" open>
-        <summary>Filtered Stream</summary>
+        <summary data-i18n="ui:Filtered Stream">Filtered Stream</summary>
         <label class="settings-field">
           <span><input type="checkbox" id="app-x-stream-enabled" ${c.stream_enabled ? "checked" : ""}> Enable outbound X stream listener</span>
-          <span class="settings-hint">Uses GET /2/tweets/search/stream from this local machine. No public IP or webhook endpoint is required.</span>
+          <span class="settings-hint" data-i18n="ui:Uses GET /2/tweets/search/stream from this local machine. No public IP or webhook endpoint is required.">Uses GET /2/tweets/search/stream from this local machine. No public IP or webhook endpoint is required.</span>
         </label>
         <label class="settings-field">
-          <span>Stream rules</span>
+          <span data-i18n="ui:Stream rules">Stream rules</span>
           <textarea id="app-x-stream-rules" rows="6" placeholder="brand::from:example has:links&#10;support::@yourhandle -is:retweet">${escHtml(_formatXRules(c.stream_rules || []))}</textarea>
-          <span class="settings-hint">One rule per line. Optional label format: tag::X query. HushClaw only manages rules tagged with its own prefix.</span>
+          <span class="settings-hint" data-i18n="ui:One rule per line. Optional label format: tag::X query. HushClaw only manages rules tagged with its own prefix.">One rule per line. Optional label format: tag::X query. HushClaw only manages rules tagged with its own prefix.</span>
         </label>
       </details>
 
@@ -1030,8 +1031,8 @@ function _startOAuth(id) {
 function _renderConnectorActions(id) {
   return `
     <div class="app-connector-actions">
-      <button id="btn-save-app-${id}">Save connector</button>
-      <button id="btn-test-app-${id}" class="secondary">Test connection</button>
+      <button id="btn-save-app-${id}" data-i18n="ui:Save connector">Save connector</button>
+      <button id="btn-test-app-${id}" class="secondary" data-i18n="ui:Test connection">Test connection</button>
       <span id="app-connector-modal-save-status">${_statusText(appConnectorsPanel.saveStatusType, appConnectorsPanel.saveStatus)}</span>
       <span id="app-connector-modal-test-status">${_statusText(appConnectorsPanel.testStatusType, appConnectorsPanel.testStatus)}</span>
     </div>
@@ -1063,20 +1064,20 @@ function _renderConnectionDetailsModal(item) {
           <h2>${escHtml(item.name)}</h2>
           <p>${escHtml(item.description || "")}</p>
         </div>
-        <span class="app-connector-status ${escHtml(statusInfo.className)}">${escHtml(statusInfo.label)}</span>
+        <span class="app-connector-status ${escHtml(statusInfo.className)}">${escHtml(uiText(statusInfo.label))}</span>
       </div>
 
       <div class="app-connector-info-grid">
         <div>
-          <span>Kind</span>
+          <span data-i18n="ui:Kind">Kind</span>
           <strong>${escHtml(item.kind.replace("_", " "))}</strong>
         </div>
         <div>
-          <span>Authentication</span>
+          <span data-i18n="ui:Authentication">Authentication</span>
           <strong>${escHtml(item.auth || "Configured in Settings")}</strong>
         </div>
         <div>
-          <span>Capabilities</span>
+          <span data-i18n="ui:Capabilities">Capabilities</span>
           <strong>${escHtml((item.capabilities || []).join(", ") || "None")}</strong>
         </div>
       </div>
@@ -1093,13 +1094,13 @@ function _renderConnectionDetailsModal(item) {
       ` : ""}
 
       <div class="app-connector-roadmap">
-        <div class="app-connector-roadmap-title">Management path</div>
-        <p>Email and calendar sources are still managed from Integrations for now. The Connections directory keeps them visible alongside apps and channels while runtime/config ownership continues to migrate here.</p>
+        <div class="app-connector-roadmap-title" data-i18n="ui:Management path">Management path</div>
+        <p data-i18n="ui:Email and calendar sources are still managed from Integrations for now. The Connections directory keeps them visible alongside apps and channels while runtime/config ownership continues to migrate here.">Email and calendar sources are still managed from Integrations for now. The Connections directory keeps them visible alongside apps and channels while runtime/config ownership continues to migrate here.</p>
       </div>
 
       <div class="app-connector-actions">
-        <button id="btn-open-connection-settings">Open Integrations</button>
-        <button id="btn-refresh-connections-modal" class="secondary">Refresh status</button>
+        <button id="btn-open-connection-settings" data-i18n="ui:Open Integrations">Open Integrations</button>
+        <button id="btn-refresh-connections-modal" class="secondary" data-i18n="ui:Refresh status">Refresh status</button>
       </div>
     </div>
   `;
@@ -1126,40 +1127,40 @@ function _renderChannelConfigModal(item) {
     <div class="app-connector-modal">
       <div class="app-connector-modal-summary">
         <div>
-          <div class="app-connector-kicker">Channel connection</div>
+          <div class="app-connector-kicker" data-i18n="ui:Channel connection">Channel connection</div>
           <h2>${escHtml(item.name)}</h2>
           <p>${escHtml(item.description || "")}</p>
         </div>
-        <span class="app-connector-status ${escHtml(statusInfo.className)}">${escHtml(statusInfo.label)}</span>
+        <span class="app-connector-status ${escHtml(statusInfo.className)}">${escHtml(uiText(statusInfo.label))}</span>
       </div>
 
       <div class="app-connector-info-grid">
         <div>
-          <span>Provider</span>
+          <span data-i18n="ui:Provider">Provider</span>
           <strong>${escHtml(item.provider.replaceAll("_", " "))}</strong>
         </div>
         <div>
-          <span>Capabilities</span>
+          <span data-i18n="ui:Capabilities">Capabilities</span>
           <strong>${escHtml((item.capabilities || []).join(", "))}</strong>
         </div>
         <div>
-          <span>Lifecycle</span>
+          <span data-i18n="ui:Lifecycle">Lifecycle</span>
           <strong>${item.connected ? "Connected runtime" : item.enabled ? "Enabled / waiting" : "Disabled"}</strong>
         </div>
       </div>
 
       <div class="app-connector-roadmap">
-        <div class="app-connector-roadmap-title">Connections-managed channel</div>
-        <p>Channel credentials and routing stay inside this Connections module. No Settings or Wizard hand-off is required.</p>
+        <div class="app-connector-roadmap-title" data-i18n="ui:Connections-managed channel">Connections-managed channel</div>
+        <p data-i18n="ui:Channel credentials and routing stay inside this Connections module. No Settings or Wizard hand-off is required.">Channel credentials and routing stay inside this Connections module. No Settings or Wizard hand-off is required.</p>
       </div>
 
       <div class="app-connector-channel-form">
-        ${channel ? channel.fields(c) : `<p class="settings-hint">No channel renderer available.</p>`}
+        ${channel ? channel.fields(c) : `<p class="settings-hint" data-i18n="ui:No channel renderer available.">No channel renderer available.</p>`}
       </div>
 
       <div class="app-connector-actions">
-        <button id="btn-save-channel-${escHtml(item.provider)}">Save connection</button>
-        <button id="btn-refresh-channel-${escHtml(item.provider)}" class="secondary">Refresh status</button>
+        <button id="btn-save-channel-${escHtml(item.provider)}" data-i18n="ui:Save connection">Save connection</button>
+        <button id="btn-refresh-channel-${escHtml(item.provider)}" class="secondary" data-i18n="ui:Refresh status">Refresh status</button>
         <span id="app-connector-modal-save-status">${_statusText(appConnectorsPanel.saveStatusType, appConnectorsPanel.saveStatus)}</span>
       </div>
     </div>
@@ -1655,11 +1656,11 @@ export function renderAppConnectorsPanel() {
   root.innerHTML = `
     <div class="app-connectors-header">
       <div>
-        <div class="app-connectors-eyebrow">Unified external integrations</div>
-        <h1>Connections</h1>
-        <p>Manage apps, channels, and sync sources from one directory. Product features like Calendar still run on local normalized data, while Connections tracks the external integrations behind them.</p>
+        <div class="app-connectors-eyebrow" data-i18n="ui:Unified external integrations">Unified external integrations</div>
+        <h1 data-i18n="ui:Connections">Connections</h1>
+        <p data-i18n="ui:Manage apps, channels, and sync sources from one directory. Product features like Calendar still run on local normalized data, while Connections tracks the external integrations behind them.">Manage apps, channels, and sync sources from one directory. Product features like Calendar still run on local normalized data, while Connections tracks the external integrations behind them.</p>
       </div>
-      <button id="btn-refresh-app-connectors" class="secondary">Refresh status</button>
+      <button id="btn-refresh-app-connectors" class="secondary" data-i18n="ui:Refresh status">Refresh status</button>
     </div>
     ${_renderGroupedCards()}
   `;
@@ -1680,3 +1681,5 @@ export function handleTestAppConnectorResult(data) {
   _setModalStatus("app-connector-modal-test-status", appConnectorsPanel.testStatusType, appConnectorsPanel.testStatus);
   renderAppConnectorsPanel();
 }
+
+document.addEventListener("locale-changed", renderAppConnectorsPanel);

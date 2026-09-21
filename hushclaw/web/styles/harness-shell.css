@@ -10,7 +10,7 @@
   --app-rail-w: 64px;
   --app-rail-w-md: 60px;
   --app-rail-w-sm: 54px;
-  --app-rail-expanded-w: 192px;
+  --app-rail-expanded-w: 216px;
   --threads-drawer-w: 260px;
   --chat-chrome-height: 44px;
   --workbench-w: 360px;
@@ -1057,4 +1057,45 @@ tr:hover td { background: color-mix(in srgb, var(--surface2) 70%, transparent); 
   .wizard-card,
   .app-modal-card { border-radius: 12px; }
   #chat-composer .input-wrap { border-radius: 14px; }
+}
+
+/* Rail utilities share the navigation rhythm; they never compete with content. */
+header.app-rail .tabs { overflow-y: auto; overflow-x: hidden; padding-block: 4px; }
+header.app-rail .tab { flex-shrink: 0; }
+header.app-rail .rail-utilities {
+  flex: 0 0 auto;
+  align-items: stretch;
+  gap: 3px;
+  padding: 10px 0 4px;
+  margin-top: 0;
+  border-top: 1px solid var(--hc-border-soft);
+}
+.rail-utilities .tab-settings { margin-top: 0; }
+.rail-utilities .rail-language { position: relative; }
+body.app-rail-expanded .rail-language .rail-locale-value {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border: 1px solid var(--hc-border-soft);
+  border-radius: 5px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--hc-label-secondary);
+  background: var(--surface);
+}
+header.app-rail .tab.active {
+  border: 0;
+  outline: 0;
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+  color: var(--accent);
+  box-shadow: none;
+}
+header.app-rail .tab.active::before,
+header.app-rail .tab.active::after { display: none; }
+header.app-rail .tab:focus-visible,
+header.app-rail .app-rail-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  header.app-rail, body { transition: none; }
 }

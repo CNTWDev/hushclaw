@@ -1,3 +1,5 @@
+import { uiText, localeTag, setLocale } from "../hushclaw/web/modules/i18n.js";
+setLocale("zh");
 // node --experimental-vm-modules --test tests/test_voxnexus_ui.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -7,13 +9,16 @@ import { readFile } from 'node:fs/promises';
 async function harness() {
   const nodes = new Map();
   class Element { value = ''; style = {}; disabled = false; handlers = {}; addEventListener(name, fn) { this.handlers[name] = fn; } dispatchEvent(event) { this.handlers[event.type]?.(event); } }
-  const document = { getElementById(id) { if (!nodes.has(id)) nodes.set(id, new Element()); return nodes.get(id); } };
+  const document = { addEventListener() {}, getElementById(id) { if (!nodes.has(id)) nodes.set(id, new Element()); return nodes.get(id); } };
   const sent = [], timers = new Map(); let serial = 0;
   const body = { innerHTML: '', querySelectorAll() { return []; } };
   const state = { wizard: { open: true, tab: 'model', model: '', cheapModel: '' }, els: { wizardBody: body }, send: msg => sent.push(msg), escHtml: s => String(s ?? '').replaceAll('<', '&lt;').replaceAll('"', '&quot;') };
   const context = vm.createContext({ document, URL, setTimeout(fn, delay) { timers.set(++serial, { fn, delay }); return serial; }, clearTimeout(id) { timers.delete(id); } });
   const mod = new vm.SourceTextModule(await readFile(new URL('../hushclaw/web/modules/settings/voxnexus.js', import.meta.url), 'utf8'), { context });
-  await mod.link(() => new vm.SyntheticModule(Object.keys(state), function() { for (const [key, value] of Object.entries(state)) this.setExport(key, value); }, { context }));
+  await mod.link(specifier => {
+    const bindings = specifier.endsWith('i18n.js') ? { uiText, localeTag } : state;
+    return new vm.SyntheticModule(Object.keys(bindings), function() { for (const [key, value] of Object.entries(bindings)) this.setExport(key, value); }, { context });
+  });
   await mod.evaluate();
   const api = mod.namespace;
   api.setVoxConfig({ gateway: 'https://gateway.example', client_id: 'app' });

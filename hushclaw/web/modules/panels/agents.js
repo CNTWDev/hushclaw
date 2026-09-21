@@ -34,7 +34,7 @@ function _agentNeedsAttention(agent, status) {
 
 function _renderRuntimePills(status) {
   if (!status.ok) {
-    return `<span class="agent-status-pill bad">runtime error</span>`;
+    return `<span class="agent-status-pill bad" data-i18n="ui:runtime error">runtime error</span>`;
   }
   const warnings = Array.isArray(status.warnings) ? status.warnings : [];
   const toolMode = status.inherits_global_tools ? "global tools" : "custom tools";
@@ -73,13 +73,13 @@ function _renderAgentEditForm(agent, def) {
       <label>Routing tags <input id="aedit-tags" type="text" value="${escHtml(_tagsToText(def.routing_tags))}" autocomplete="off"></label>
       <label>Tools <span class="aedit-hint">comma-separated · blank = inherit global · keep search_skills plus use_skill or skill_view for dynamic skills</span><input id="aedit-tools" type="text" value="${escHtml(_tagsToText(def.tools))}" placeholder="recall, fetch_url, search_skills, use_skill" autocomplete="off"></label>
       <details class="agent-advanced-create">
-        <summary>Prompt</summary>
+        <summary data-i18n="ui:Prompt">Prompt</summary>
         <label>System Prompt <textarea id="aedit-system" rows="5">${escHtml(def.system_prompt || "")}</textarea></label>
         <label>Instructions <textarea id="aedit-instr" rows="3">${escHtml(def.instructions || "")}</textarea></label>
       </details>
       <div class="agent-edit-actions">
-        <button class="btn-aedit-save" data-name="${escHtml(agent.name)}">Save</button>
-        <button class="btn-aedit-cancel secondary">Cancel</button>
+        <button class="btn-aedit-save" data-name="${escHtml(agent.name)}" data-i18n="ui:Save">Save</button>
+        <button class="btn-aedit-cancel secondary" data-i18n="ui:Cancel">Cancel</button>
       </div>
     </div>`;
 }
@@ -254,19 +254,19 @@ export function renderAgentsPanel(items) {
   if (agentsState.addingNew) {
     el.innerHTML = `
       <div class="agent-edit-form agent-edit-form-standalone">
-        <div class="agent-edit-title">New Agent</div>
+        <div class="agent-edit-title" data-i18n="ui:New Agent">New Agent</div>
         <label>Name <input id="anew-name" type="text" placeholder="my-agent" autocomplete="off"></label>
         <label>Description <input id="anew-desc" type="text" placeholder="What does this agent do?" autocomplete="off"></label>
         <label>Routing tags <input id="anew-tags" type="text" placeholder="research, writing" autocomplete="off"></label>
         <details class="agent-advanced-create">
-          <summary>Advanced</summary>
+          <summary data-i18n="ui:Advanced">Advanced</summary>
           <label>Tools <span class="aedit-hint">comma-separated · blank = inherit global · dynamic skills need search_skills plus use_skill or skill_view</span><input id="anew-tools" type="text" placeholder="recall, fetch_url, search_skills, use_skill" autocomplete="off"></label>
           <label>System Prompt <textarea id="anew-system" rows="4" placeholder="You are..."></textarea></label>
           <label>Instructions <textarea id="anew-instr" rows="3" placeholder="Always reply in..."></textarea></label>
         </details>
         <div class="agent-edit-actions">
-          <button id="btn-anew-submit">Create</button>
-          <button id="btn-anew-cancel" class="secondary">Cancel</button>
+          <button id="btn-anew-submit" data-i18n="ui:Create">Create</button>
+          <button id="btn-anew-cancel" class="secondary" data-i18n="ui:Cancel">Cancel</button>
         </div>
       </div>`;
     el.querySelector("#btn-anew-cancel").addEventListener("click", () => {
@@ -301,7 +301,7 @@ export function renderAgentsPanel(items) {
   }
 
   if (!agentsState.items.length) {
-    el.innerHTML = '<div class="empty-state">No agents yet.</div>';
+    el.innerHTML = '<div class="empty-state" data-i18n="ui:No agents yet.">No agents yet.</div>';
     return;
   }
 
@@ -314,10 +314,10 @@ export function renderAgentsPanel(items) {
   el.innerHTML = `
     <div class="agents-workbench">
       <div class="agents-summary">
-        <div><b>${all.length}</b><span>agents</span></div>
-        <div><b>${customCount}</b><span>custom</span></div>
-        <div><b>${attentionCount}</b><span>need attention</span></div>
-        <div><b>${escHtml(state.agent || "default")}</b><span>current</span></div>
+        <div><b>${all.length}</b><span data-i18n="ui:agents">agents</span></div>
+        <div><b>${customCount}</b><span data-i18n="ui:custom">custom</span></div>
+        <div><b>${attentionCount}</b><span data-i18n="ui:need attention">need attention</span></div>
+        <div><b>${escHtml(state.agent || "default")}</b><span data-i18n="ui:current">current</span></div>
       </div>
       <div class="agents-filterbar">
         <input id="agent-search" type="search" placeholder="Search agents" value="${escHtml(agentsState.query || "")}" autocomplete="off">
@@ -345,15 +345,15 @@ export function renderAgentsPanel(items) {
   const table = el.querySelector(".agents-table");
   if (!table) return;
   if (!list.length) {
-    table.innerHTML = '<div class="empty-state">No matching agents.</div>';
+    table.innerHTML = '<div class="empty-state" data-i18n="ui:No matching agents.">No matching agents.</div>';
     return;
   }
 
   list.forEach((a) => {
     const status = _runtimeStatusFor(a.name);
     const sourceBadge = a.editable
-      ? '<span class="agent-source-pill custom">custom</span>'
-      : '<span class="agent-source-pill config">config</span>';
+      ? '<span class="agent-source-pill custom" data-i18n="ui:custom">custom</span>'
+      : '<span class="agent-source-pill config" data-i18n="ui:config">config</span>';
     const desc = (a.description || "").trim() || "No description.";
     const tags = Array.isArray(a.routing_tags) ? a.routing_tags : [];
     const isCurrent = state.agent === a.name;
@@ -379,19 +379,19 @@ export function renderAgentsPanel(items) {
           <div class="agent-row-title">
             <span class="agent-row-name">${escHtml(a.name)}</span>
             ${sourceBadge}
-            ${isCurrent ? '<span class="agent-source-pill current">current</span>' : ""}
+            ${isCurrent ? '<span class="agent-source-pill current" data-i18n="ui:current">current</span>' : ""}
           </div>
           <div class="agent-row-actions">
-            <button type="button" class="btn-agent-test" data-name="${escHtml(a.name)}">Test</button>
-            <button type="button" class="btn-agent-current secondary" data-name="${escHtml(a.name)}" ${isCurrent ? "disabled" : ""}>Set current</button>
-            <button type="button" class="btn-aedit-open secondary" data-name="${escHtml(a.name)}" ${a.editable ? "" : "disabled"}>Edit</button>
-            <button type="button" class="btn-adelete danger" data-name="${escHtml(a.name)}" ${a.editable ? "" : "disabled"}>Delete</button>
+            <button type="button" class="btn-agent-test" data-name="${escHtml(a.name)}" data-i18n="ui:Test">Test</button>
+            <button type="button" class="btn-agent-current secondary" data-name="${escHtml(a.name)}" ${isCurrent ? "disabled" : ""} data-i18n="ui:Set current">Set current</button>
+            <button type="button" class="btn-aedit-open secondary" data-name="${escHtml(a.name)}" ${a.editable ? "" : "disabled"} data-i18n="ui:Edit">Edit</button>
+            <button type="button" class="btn-adelete danger" data-name="${escHtml(a.name)}" ${a.editable ? "" : "disabled"} data-i18n="ui:Delete">Delete</button>
           </div>
         </div>
         <div class="agent-row-desc">${escHtml(desc)}</div>
         <div class="agent-row-meta">
-          <div class="agent-tag-row">${tags.length ? tags.map((tag) => `<span class="cap-tag">${escHtml(tag)}</span>`).join("") : '<span class="agent-muted">manual routing only</span>'}</div>
-          <div class="agent-status-row">${status ? _renderRuntimePills(status) : '<span class="agent-status-pill neutral">checking</span>'}</div>
+          <div class="agent-tag-row">${tags.length ? tags.map((tag) => `<span class="cap-tag">${escHtml(tag)}</span>`).join("") : '<span class="agent-muted" data-i18n="ui:manual routing only">manual routing only</span>'}</div>
+          <div class="agent-status-row">${status ? _renderRuntimePills(status) : '<span class="agent-status-pill neutral" data-i18n="ui:checking">checking</span>'}</div>
         </div>
         ${warningMarkup}
         ${extraMarkup}

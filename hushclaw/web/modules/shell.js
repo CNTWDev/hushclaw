@@ -1,3 +1,4 @@
+import { uiText } from "./i18n.js";
 /**
  * shell.js — persistent application-shell interactions.
  * Kept independent from chat boot so navigation remains usable while the
@@ -86,8 +87,8 @@ function applyRailState(expanded) {
   body.classList.toggle("app-rail-expanded", expanded);
   if (!toggle) return;
   toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
-  toggle.setAttribute("aria-label", expanded ? "Collapse navigation" : "Expand navigation");
-  toggle.title = expanded ? "Collapse navigation" : "Expand navigation";
+  toggle.setAttribute("aria-label", uiText(expanded ? "Collapse navigation" : "Expand navigation"));
+  toggle.title = uiText(expanded ? "Collapse navigation" : "Expand navigation");
 }
 
 let initialExpanded = false;
@@ -123,4 +124,10 @@ wireColumnResize({
   min: 300,
   max: 520,
   direction: -1,
+});
+
+document.addEventListener("locale-changed", () => {
+  const label = uiText(document.body.classList.contains("app-rail-expanded") ? "Collapse navigation" : "Expand navigation");
+  toggle?.setAttribute("aria-label", label);
+  if (toggle) toggle.title = label;
 });

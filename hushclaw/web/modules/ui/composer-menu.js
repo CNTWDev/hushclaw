@@ -23,24 +23,24 @@ export function initComposerMenu({ button, input, onUpload, onBrowseFiles } = {}
   menu.setAttribute("role", "menu");
   menu.setAttribute("aria-label", "Add context or action");
   menu.innerHTML = `
-    <div class="composer-source-menu-label">Add to prompt</div>
+    <div class="composer-source-menu-label" data-i18n="ui:Add to prompt">Add to prompt</div>
     <button type="button" class="composer-source-menu-item" role="menuitem" data-action="upload">
       <span class="composer-source-menu-icon" aria-hidden="true">↑</span>
-      <span><strong>Upload files</strong><small>Documents, images, and other context</small></span>
+      <span><strong data-i18n="ui:Upload files">Upload files</strong><small data-i18n="ui:Documents, images, and other context">Documents, images, and other context</small></span>
     </button>
     <button type="button" class="composer-source-menu-item" role="menuitem" data-action="files">
       <span class="composer-source-menu-icon" aria-hidden="true">◇</span>
-      <span><strong>Browse workspace files</strong><small>Use an existing generated file</small></span>
+      <span><strong data-i18n="ui:Browse workspace files">Browse workspace files</strong><small data-i18n="ui:Use an existing generated file">Use an existing generated file</small></span>
     </button>
     <div class="composer-source-menu-separator"></div>
     <button type="button" class="composer-source-menu-item" role="menuitem" data-action="skill">
       <span class="composer-source-menu-icon" aria-hidden="true">/</span>
-      <span><strong>Use a skill</strong><small>Search available skills and commands</small></span>
+      <span><strong data-i18n="ui:Use a skill">Use a skill</strong><small data-i18n="ui:Search available skills and commands">Search available skills and commands</small></span>
       <kbd>/</kbd>
     </button>
     <button type="button" class="composer-source-menu-item" role="menuitem" data-action="agent">
       <span class="composer-source-menu-icon" aria-hidden="true">@</span>
-      <span><strong>Mention an agent</strong><small>Route work to a specific agent</small></span>
+      <span><strong data-i18n="ui:Mention an agent">Mention an agent</strong><small data-i18n="ui:Route work to a specific agent">Route work to a specific agent</small></span>
       <kbd>@</kbd>
     </button>`;
 

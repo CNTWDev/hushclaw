@@ -45,7 +45,7 @@ export const CHANNELS = [
     setupLabel: "@BotFather",
     fields: (c) => `
       <div class="wfield">
-        <label>Bot Token</label>
+        <label data-i18n="ui:Bot Token">Bot Token</label>
         <input type="password" id="tg-token" autocomplete="off"
                placeholder="123456:ABCDEF…" value="${escHtml(c.bot_token)}">
         <div class="wfield-hint">${_credHint(c.bot_token_set)}
@@ -53,22 +53,22 @@ export const CHANNELS = [
         </div>
       </div>
       <div class="wfield">
-        <label>Agent</label>
+        <label data-i18n="ui:Agent">Agent</label>
         <input type="text" id="tg-agent" value="${escHtml(c.agent)}" placeholder="default">
       </div>
       <div class="wfield">
-        <label>Workspace <span class="wfield-optional">(optional)</span></label>
+        <label>Workspace <span class="wfield-optional" data-i18n="ui:(optional)">(optional)</span></label>
         <input type="text" id="tg-workspace" value="${escHtml(c.workspace || '')}" placeholder="default">
-        <div class="wfield-hint">Named workspace to use for inbound messages. Leave blank to use the active workspace.</div>
+        <div class="wfield-hint" data-i18n="ui:Named workspace to use for inbound messages. Leave blank to use the active workspace.">Named workspace to use for inbound messages. Leave blank to use the active workspace.</div>
       </div>
       <div class="wfield">
-        <label>DM Allowlist <span class="wfield-optional">(optional)</span></label>
+        <label>DM Allowlist <span class="wfield-optional" data-i18n="ui:(optional)">(optional)</span></label>
         <input type="text" id="tg-allowlist" value="${escHtml(c.allowlist)}"
                placeholder="123456789, 987654321">
-        <div class="wfield-hint">Comma-separated user IDs for direct messages. Empty = allow everyone.</div>
+        <div class="wfield-hint" data-i18n="ui:Comma-separated user IDs for direct messages. Empty = allow everyone.">Comma-separated user IDs for direct messages. Empty = allow everyone.</div>
       </div>
       <div class="wfield">
-        <label>Group Policy</label>
+        <label data-i18n="ui:Group Policy">Group Policy</label>
         <select id="tg-group-policy">
           ${["open","allowlist","disabled"].map((v) =>
             `<option value="${v}"${c.group_policy===v?" selected":""}>${v}</option>`
@@ -81,34 +81,34 @@ export const CHANNELS = [
         </div>
       </div>
       <div class="wfield">
-        <label>Group Allowlist <span class="wfield-optional">(optional)</span></label>
+        <label>Group Allowlist <span class="wfield-optional" data-i18n="ui:(optional)">(optional)</span></label>
         <input type="text" id="tg-group-allowlist" value="${escHtml(c.group_allowlist)}"
                placeholder="-100123456789, -100987654321">
-        <div class="wfield-hint">Comma-separated group/supergroup chat IDs (negative numbers).</div>
+        <div class="wfield-hint" data-i18n="ui:Comma-separated group/supergroup chat IDs (negative numbers).">Comma-separated group/supergroup chat IDs (negative numbers).</div>
       </div>
       <div class="wfield wfield-row">
-        <label>Require @mention in groups</label>
+        <label data-i18n="ui:Require @mention in groups">Require @mention in groups</label>
         <label class="toggle-switch toggle-inline">
           <input type="checkbox" id="tg-require-mention" ${c.require_mention ? "checked" : ""}>
           <span class="toggle-slider"></span>
         </label>
-        <div class="wfield-hint">Only respond when the bot is @mentioned in group chats.</div>
+        <div class="wfield-hint" data-i18n="ui:Only respond when the bot is @mentioned in group chats.">Only respond when the bot is @mentioned in group chats.</div>
       </div>
       <div class="wfield wfield-row">
-        <label>Streaming replies</label>
+        <label data-i18n="ui:Streaming replies">Streaming replies</label>
         <label class="toggle-switch toggle-inline">
           <input type="checkbox" id="tg-stream" ${c.stream ? "checked" : ""}>
           <span class="toggle-slider"></span>
         </label>
-        <div class="wfield-hint">Edit message progressively as text arrives (simulates streaming).</div>
+        <div class="wfield-hint" data-i18n="ui:Edit message progressively as text arrives (simulates streaming).">Edit message progressively as text arrives (simulates streaming).</div>
       </div>
       <div class="wfield">
-        <label>Reply protocol</label>
+        <label data-i18n="ui:Reply protocol">Reply protocol</label>
         <select id="tg-render-mode">
           <option value="telegram_html"${(c.render_mode || "telegram_html")==="telegram_html" ? " selected" : ""}>Telegram HTML</option>
-          <option value="plain"${c.render_mode==="plain" ? " selected" : ""}>Plain text</option>
+          <option value="plain"${c.render_mode==="plain" ? " selected" : ""} data-i18n="ui:Plain text">Plain text</option>
         </select>
-        <div class="wfield-hint">Telegram HTML preserves bold, italic, code blocks, and links. Plain text is the safest fallback.</div>
+        <div class="wfield-hint" data-i18n="ui:Telegram HTML preserves bold, italic, code blocks, and links. Plain text is the safest fallback.">Telegram HTML preserves bold, italic, code blocks, and links. Plain text is the safest fallback.</div>
       </div>`,
   },
   {
@@ -120,19 +120,19 @@ export const CHANNELS = [
     setupLabel: "Feishu Open Platform",
     fields: (c) => `
       <div class="wfield">
-        <label>App ID</label>
+        <label data-i18n="ui:App ID">App ID</label>
         <input type="text" id="fs-appid" autocomplete="off"
                placeholder="cli_xxxxxxxxxx" value="${escHtml(c.app_id)}">
-        <div class="wfield-hint">Found in Feishu Open Platform → App credentials.</div>
+        <div class="wfield-hint" data-i18n="ui:Found in Feishu Open Platform → App credentials.">Found in Feishu Open Platform → App credentials.</div>
       </div>
       <div class="wfield">
-        <label>App Secret</label>
+        <label data-i18n="ui:App Secret">App Secret</label>
         <input type="password" id="fs-secret" autocomplete="off"
-               placeholder="App Secret" value="${escHtml(c.app_secret)}">
+               placeholder="App Secret" value="${escHtml(c.app_secret)}" data-i18n-ph="ui:App Secret">
         <div class="wfield-hint">${_credHint(c.app_secret_set)}</div>
       </div>
       <div class="wfield">
-        <label>Encrypt Key <span class="wfield-optional">(optional)</span></label>
+        <label>Encrypt Key <span class="wfield-optional" data-i18n="ui:(optional)">(optional)</span></label>
         <input type="password" id="fs-encrypt-key" autocomplete="off"
                placeholder="Encrypt Key" value="${escHtml(c.encrypt_key)}">
         <div class="wfield-hint">${_credHint(c.encrypt_key_set)}
@@ -140,7 +140,7 @@ export const CHANNELS = [
         </div>
       </div>
       <div class="wfield">
-        <label>Verification Token <span class="wfield-optional">(optional)</span></label>
+        <label>Verification Token <span class="wfield-optional" data-i18n="ui:(optional)">(optional)</span></label>
         <input type="password" id="fs-verify-token" autocomplete="off"
                placeholder="Verification Token" value="${escHtml(c.verification_token)}">
         <div class="wfield-hint">${_credHint(c.verification_token_set)}
@@ -148,35 +148,35 @@ export const CHANNELS = [
         </div>
       </div>
       <div class="wfield">
-        <label>Agent</label>
+        <label data-i18n="ui:Agent">Agent</label>
         <input type="text" id="fs-agent" value="${escHtml(c.agent)}" placeholder="default">
       </div>
       <div class="wfield">
-        <label>Workspace <span class="wfield-optional">(optional)</span></label>
+        <label>Workspace <span class="wfield-optional" data-i18n="ui:(optional)">(optional)</span></label>
         <input type="text" id="fs-workspace" value="${escHtml(c.workspace || '')}" placeholder="default">
-        <div class="wfield-hint">Named workspace to use for inbound messages. Leave blank to use the active workspace.</div>
+        <div class="wfield-hint" data-i18n="ui:Named workspace to use for inbound messages. Leave blank to use the active workspace.">Named workspace to use for inbound messages. Leave blank to use the active workspace.</div>
       </div>
       <div class="wfield">
-        <label>Chat Allowlist <span class="wfield-optional">(optional)</span></label>
+        <label>Chat Allowlist <span class="wfield-optional" data-i18n="ui:(optional)">(optional)</span></label>
         <input type="text" id="fs-allowlist" value="${escHtml(c.allowlist)}"
                placeholder="oc_xxxxxxxx, oc_yyyyyyyy">
-        <div class="wfield-hint">Comma-separated Feishu chat IDs. Empty = allow all.</div>
+        <div class="wfield-hint" data-i18n="ui:Comma-separated Feishu chat IDs. Empty = allow all.">Comma-separated Feishu chat IDs. Empty = allow all.</div>
       </div>
       <div class="wfield wfield-row">
-        <label>Streaming replies</label>
+        <label data-i18n="ui:Streaming replies">Streaming replies</label>
         <label class="toggle-switch toggle-inline">
           <input type="checkbox" id="fs-stream" ${c.stream ? "checked" : ""}>
           <span class="toggle-slider"></span>
         </label>
-        <div class="wfield-hint">Requires Interactive Card permissions in Feishu Open Platform.</div>
+        <div class="wfield-hint" data-i18n="ui:Requires Interactive Card permissions in Feishu Open Platform.">Requires Interactive Card permissions in Feishu Open Platform.</div>
       </div>
       <div class="wfield">
-        <label>Reply protocol</label>
+        <label data-i18n="ui:Reply protocol">Reply protocol</label>
         <select id="fs-render-mode">
-          <option value="feishu_post"${(c.render_mode || "feishu_post")==="feishu_post" ? " selected" : ""}>Rich post</option>
-          <option value="plain"${c.render_mode==="plain" ? " selected" : ""}>Plain text</option>
+          <option value="feishu_post"${(c.render_mode || "feishu_post")==="feishu_post" ? " selected" : ""} data-i18n="ui:Rich post">Rich post</option>
+          <option value="plain"${c.render_mode==="plain" ? " selected" : ""} data-i18n="ui:Plain text">Plain text</option>
         </select>
-        <div class="wfield-hint">Rich post preserves grouped structure in a Feishu card. Plain text is more compact and universal.</div>
+        <div class="wfield-hint" data-i18n="ui:Rich post preserves grouped structure in a Feishu card. Plain text is more compact and universal.">Rich post preserves grouped structure in a Feishu card. Plain text is more compact and universal.</div>
       </div>`,
   },
   {
@@ -188,58 +188,58 @@ export const CHANNELS = [
     setupLabel: "Discord Developer Portal",
     fields: (c) => `
       <div class="wfield">
-        <label>Bot Token</label>
+        <label data-i18n="ui:Bot Token">Bot Token</label>
         <input type="password" id="dc-token" autocomplete="off"
                placeholder="MTxxxxxxxx.xxxxxx.xxxxxxxxxxxx" value="${escHtml(c.bot_token)}">
         <div class="wfield-hint">${_credHint(c.bot_token_set)}
-          <a href="https://discord.com/developers/applications" target="_blank" rel="noopener">Developer Portal</a>
+          <a href="https://discord.com/developers/applications" target="_blank" rel="noopener" data-i18n="ui:Developer Portal">Developer Portal</a>
           → Your App → Bot → Token. Enable Message Content Intent.
         </div>
       </div>
       <div class="wfield">
-        <label>Agent</label>
+        <label data-i18n="ui:Agent">Agent</label>
         <input type="text" id="dc-agent" value="${escHtml(c.agent)}" placeholder="default">
       </div>
       <div class="wfield">
-        <label>Workspace <span class="wfield-optional">(optional)</span></label>
+        <label>Workspace <span class="wfield-optional" data-i18n="ui:(optional)">(optional)</span></label>
         <input type="text" id="dc-workspace" value="${escHtml(c.workspace || '')}" placeholder="default">
-        <div class="wfield-hint">Named workspace to use for inbound messages. Leave blank to use the active workspace.</div>
+        <div class="wfield-hint" data-i18n="ui:Named workspace to use for inbound messages. Leave blank to use the active workspace.">Named workspace to use for inbound messages. Leave blank to use the active workspace.</div>
       </div>
       <div class="wfield">
-        <label>User Allowlist <span class="wfield-optional">(optional)</span></label>
+        <label>User Allowlist <span class="wfield-optional" data-i18n="ui:(optional)">(optional)</span></label>
         <input type="text" id="dc-allowlist" value="${escHtml(c.allowlist)}"
                placeholder="123456789012345678, …">
-        <div class="wfield-hint">Comma-separated Discord user IDs (18-digit snowflakes). Empty = allow all.</div>
+        <div class="wfield-hint" data-i18n="ui:Comma-separated Discord user IDs (18-digit snowflakes). Empty = allow all.">Comma-separated Discord user IDs (18-digit snowflakes). Empty = allow all.</div>
       </div>
       <div class="wfield">
-        <label>Server Allowlist <span class="wfield-optional">(optional)</span></label>
+        <label>Server Allowlist <span class="wfield-optional" data-i18n="ui:(optional)">(optional)</span></label>
         <input type="text" id="dc-guild-allowlist" value="${escHtml(c.guild_allowlist)}"
                placeholder="987654321098765432, …">
-        <div class="wfield-hint">Comma-separated server (guild) IDs. Empty = all servers.</div>
+        <div class="wfield-hint" data-i18n="ui:Comma-separated server (guild) IDs. Empty = all servers.">Comma-separated server (guild) IDs. Empty = all servers.</div>
       </div>
       <div class="wfield wfield-row">
-        <label>Require @mention in servers</label>
+        <label data-i18n="ui:Require @mention in servers">Require @mention in servers</label>
         <label class="toggle-switch toggle-inline">
           <input type="checkbox" id="dc-require-mention" ${c.require_mention ? "checked" : ""}>
           <span class="toggle-slider"></span>
         </label>
-        <div class="wfield-hint">Only respond when @mentioned in server channels (DMs always respond).</div>
+        <div class="wfield-hint" data-i18n="ui:Only respond when @mentioned in server channels (DMs always respond).">Only respond when @mentioned in server channels (DMs always respond).</div>
       </div>
       <div class="wfield wfield-row">
-        <label>Streaming replies</label>
+        <label data-i18n="ui:Streaming replies">Streaming replies</label>
         <label class="toggle-switch toggle-inline">
           <input type="checkbox" id="dc-stream" ${c.stream ? "checked" : ""}>
           <span class="toggle-slider"></span>
         </label>
-        <div class="wfield-hint">Edit the message progressively as text arrives.</div>
+        <div class="wfield-hint" data-i18n="ui:Edit the message progressively as text arrives.">Edit the message progressively as text arrives.</div>
       </div>
       <div class="wfield">
-        <label>Reply protocol</label>
+        <label data-i18n="ui:Reply protocol">Reply protocol</label>
         <select id="dc-render-mode">
           <option value="discord_markdown"${(c.render_mode || "discord_markdown")==="discord_markdown" ? " selected" : ""}>Discord Markdown</option>
-          <option value="plain"${c.render_mode==="plain" ? " selected" : ""}>Plain text</option>
+          <option value="plain"${c.render_mode==="plain" ? " selected" : ""} data-i18n="ui:Plain text">Plain text</option>
         </select>
-        <div class="wfield-hint">Discord Markdown preserves headings, lists, links, and fenced code blocks. Plain text strips formatting.</div>
+        <div class="wfield-hint" data-i18n="ui:Discord Markdown preserves headings, lists, links, and fenced code blocks. Plain text strips formatting.">Discord Markdown preserves headings, lists, links, and fenced code blocks. Plain text strips formatting.</div>
       </div>`,
   },
   {
@@ -267,35 +267,35 @@ export const CHANNELS = [
         </div>
       </div>
       <div class="wfield">
-        <label>Agent</label>
+        <label data-i18n="ui:Agent">Agent</label>
         <input type="text" id="sl-agent" value="${escHtml(c.agent)}" placeholder="default">
       </div>
       <div class="wfield">
-        <label>Workspace <span class="wfield-optional">(optional)</span></label>
+        <label>Workspace <span class="wfield-optional" data-i18n="ui:(optional)">(optional)</span></label>
         <input type="text" id="sl-workspace" value="${escHtml(c.workspace || '')}" placeholder="default">
-        <div class="wfield-hint">Named workspace to use for inbound messages. Leave blank to use the active workspace.</div>
+        <div class="wfield-hint" data-i18n="ui:Named workspace to use for inbound messages. Leave blank to use the active workspace.">Named workspace to use for inbound messages. Leave blank to use the active workspace.</div>
       </div>
       <div class="wfield">
-        <label>Channel Allowlist <span class="wfield-optional">(optional)</span></label>
+        <label>Channel Allowlist <span class="wfield-optional" data-i18n="ui:(optional)">(optional)</span></label>
         <input type="text" id="sl-allowlist" value="${escHtml(c.allowlist)}"
                placeholder="C04XXXXXXX, D04YYYYYYY">
-        <div class="wfield-hint">Comma-separated channel IDs (C… public, D… DMs). Empty = all channels.</div>
+        <div class="wfield-hint" data-i18n="ui:Comma-separated channel IDs (C… public, D… DMs). Empty = all channels.">Comma-separated channel IDs (C… public, D… DMs). Empty = all channels.</div>
       </div>
       <div class="wfield wfield-row">
-        <label>Streaming replies</label>
+        <label data-i18n="ui:Streaming replies">Streaming replies</label>
         <label class="toggle-switch toggle-inline">
           <input type="checkbox" id="sl-stream" ${c.stream ? "checked" : ""}>
           <span class="toggle-slider"></span>
         </label>
-        <div class="wfield-hint">Update the message progressively as text arrives.</div>
+        <div class="wfield-hint" data-i18n="ui:Update the message progressively as text arrives.">Update the message progressively as text arrives.</div>
       </div>
       <div class="wfield">
-        <label>Reply protocol</label>
+        <label data-i18n="ui:Reply protocol">Reply protocol</label>
         <select id="sl-render-mode">
           <option value="slack_mrkdwn"${(c.render_mode || "slack_mrkdwn")==="slack_mrkdwn" ? " selected" : ""}>Slack mrkdwn</option>
-          <option value="plain"${c.render_mode==="plain" ? " selected" : ""}>Plain text</option>
+          <option value="plain"${c.render_mode==="plain" ? " selected" : ""} data-i18n="ui:Plain text">Plain text</option>
         </select>
-        <div class="wfield-hint">Slack mrkdwn uses section blocks with rich formatting. Plain text sends a simpler message body.</div>
+        <div class="wfield-hint" data-i18n="ui:Slack mrkdwn uses section blocks with rich formatting. Plain text sends a simpler message body.">Slack mrkdwn uses section blocks with rich formatting. Plain text sends a simpler message body.</div>
       </div>`,
   },
   {
@@ -307,40 +307,40 @@ export const CHANNELS = [
     setupLabel: "DingTalk Open Platform",
     fields: (c) => `
       <div class="wfield">
-        <label>Client ID (App Key)</label>
+        <label data-i18n="ui:Client ID (App Key)">Client ID (App Key)</label>
         <input type="text" id="dt-client-id" autocomplete="off"
                placeholder="dingxxxxxxxxxxxx" value="${escHtml(c.client_id)}">
         <div class="wfield-hint">DingTalk Open Platform → App → Credentials &amp; Basic Info → AppKey.
           Enable Stream Push Mode under Subscription Management.</div>
       </div>
       <div class="wfield">
-        <label>Client Secret (App Secret)</label>
+        <label data-i18n="ui:Client Secret (App Secret)">Client Secret (App Secret)</label>
         <input type="password" id="dt-client-secret" autocomplete="off"
-               placeholder="App Secret" value="${escHtml(c.client_secret)}">
+               placeholder="App Secret" value="${escHtml(c.client_secret)}" data-i18n-ph="ui:App Secret">
         <div class="wfield-hint">${_credHint(c.client_secret_set)}</div>
       </div>
       <div class="wfield">
-        <label>Agent</label>
+        <label data-i18n="ui:Agent">Agent</label>
         <input type="text" id="dt-agent" value="${escHtml(c.agent)}" placeholder="default">
       </div>
       <div class="wfield">
-        <label>Workspace <span class="wfield-optional">(optional)</span></label>
+        <label>Workspace <span class="wfield-optional" data-i18n="ui:(optional)">(optional)</span></label>
         <input type="text" id="dt-workspace" value="${escHtml(c.workspace || '')}" placeholder="default">
-        <div class="wfield-hint">Named workspace to use for inbound messages. Leave blank to use the active workspace.</div>
+        <div class="wfield-hint" data-i18n="ui:Named workspace to use for inbound messages. Leave blank to use the active workspace.">Named workspace to use for inbound messages. Leave blank to use the active workspace.</div>
       </div>
       <div class="wfield">
-        <label>User Allowlist <span class="wfield-optional">(optional)</span></label>
+        <label>User Allowlist <span class="wfield-optional" data-i18n="ui:(optional)">(optional)</span></label>
         <input type="text" id="dt-allowlist" value="${escHtml(c.allowlist)}"
                placeholder="user_openid1, user_openid2">
-        <div class="wfield-hint">Comma-separated DingTalk user open IDs. Empty = allow everyone.</div>
+        <div class="wfield-hint" data-i18n="ui:Comma-separated DingTalk user open IDs. Empty = allow everyone.">Comma-separated DingTalk user open IDs. Empty = allow everyone.</div>
       </div>
       <div class="wfield">
-        <label>Reply protocol</label>
+        <label data-i18n="ui:Reply protocol">Reply protocol</label>
         <select id="dt-render-mode">
           <option value="sample_markdown"${(c.render_mode || "sample_markdown")==="sample_markdown" ? " selected" : ""}>sampleMarkdown</option>
-          <option value="plain"${c.render_mode==="plain" ? " selected" : ""}>Plain text</option>
+          <option value="plain"${c.render_mode==="plain" ? " selected" : ""} data-i18n="ui:Plain text">Plain text</option>
         </select>
-        <div class="wfield-hint">sampleMarkdown sends a titled rich reply; plain text falls back to DingTalk sampleText.</div>
+        <div class="wfield-hint" data-i18n="ui:sampleMarkdown sends a titled rich reply; plain text falls back to DingTalk sampleText.">sampleMarkdown sends a titled rich reply; plain text falls back to DingTalk sampleText.</div>
       </div>`,
   },
   {
@@ -352,26 +352,26 @@ export const CHANNELS = [
     setupLabel: "WeCom Admin Console",
     fields: (c) => `
       <div class="wfield">
-        <label>Corp ID</label>
+        <label data-i18n="ui:Corp ID">Corp ID</label>
         <input type="text" id="wc-corp-id" autocomplete="off"
                placeholder="ww…" value="${escHtml(c.corp_id)}">
-        <div class="wfield-hint">WeCom Admin → My Enterprise → Enterprise Info → Enterprise ID.</div>
+        <div class="wfield-hint" data-i18n="ui:WeCom Admin → My Enterprise → Enterprise Info → Enterprise ID.">WeCom Admin → My Enterprise → Enterprise Info → Enterprise ID.</div>
       </div>
       <div class="wfield">
-        <label>Corp Secret</label>
+        <label data-i18n="ui:Corp Secret">Corp Secret</label>
         <input type="password" id="wc-corp-secret" autocomplete="off"
-               placeholder="App Secret" value="${escHtml(c.corp_secret)}">
+               placeholder="App Secret" value="${escHtml(c.corp_secret)}" data-i18n-ph="ui:App Secret">
         <div class="wfield-hint">${_credHint(c.corp_secret_set)}
           WeCom Admin → App Management → Your App → API → Secret.
         </div>
       </div>
       <div class="wfield">
-        <label>Agent ID</label>
+        <label data-i18n="ui:Agent ID">Agent ID</label>
         <input type="number" id="wc-agent-id" value="${c.agent_id || 0}" min="0">
-        <div class="wfield-hint">App AgentID from WeCom Admin → App Management.</div>
+        <div class="wfield-hint" data-i18n="ui:App AgentID from WeCom Admin → App Management.">App AgentID from WeCom Admin → App Management.</div>
       </div>
       <div class="wfield">
-        <label>Callback Token</label>
+        <label data-i18n="ui:Callback Token">Callback Token</label>
         <input type="password" id="wc-token" autocomplete="off"
                placeholder="Your callback token" value="${escHtml(c.token)}">
         <div class="wfield-hint">${_credHint(c.token_set)}
@@ -380,27 +380,27 @@ export const CHANNELS = [
         </div>
       </div>
       <div class="wfield">
-        <label>Agent</label>
+        <label data-i18n="ui:Agent">Agent</label>
         <input type="text" id="wc-agent" value="${escHtml(c.agent)}" placeholder="default">
       </div>
       <div class="wfield">
-        <label>Workspace <span class="wfield-optional">(optional)</span></label>
+        <label>Workspace <span class="wfield-optional" data-i18n="ui:(optional)">(optional)</span></label>
         <input type="text" id="wc-workspace" value="${escHtml(c.workspace || '')}" placeholder="default">
-        <div class="wfield-hint">Named workspace to use for inbound messages. Leave blank to use the active workspace.</div>
+        <div class="wfield-hint" data-i18n="ui:Named workspace to use for inbound messages. Leave blank to use the active workspace.">Named workspace to use for inbound messages. Leave blank to use the active workspace.</div>
       </div>
       <div class="wfield">
-        <label>User Allowlist <span class="wfield-optional">(optional)</span></label>
+        <label>User Allowlist <span class="wfield-optional" data-i18n="ui:(optional)">(optional)</span></label>
         <input type="text" id="wc-allowlist" value="${escHtml(c.allowlist)}"
                placeholder="zhangsan, lisi">
-        <div class="wfield-hint">Comma-separated WeCom user IDs. Empty = allow everyone.</div>
+        <div class="wfield-hint" data-i18n="ui:Comma-separated WeCom user IDs. Empty = allow everyone.">Comma-separated WeCom user IDs. Empty = allow everyone.</div>
       </div>
       <div class="wfield">
-        <label>Reply protocol</label>
+        <label data-i18n="ui:Reply protocol">Reply protocol</label>
         <select id="wc-render-mode">
           <option value="wecom_markdown"${(c.render_mode || "wecom_markdown")==="wecom_markdown" ? " selected" : ""}>WeCom Markdown</option>
-          <option value="plain"${c.render_mode==="plain" ? " selected" : ""}>Plain text</option>
+          <option value="plain"${c.render_mode==="plain" ? " selected" : ""} data-i18n="ui:Plain text">Plain text</option>
         </select>
-        <div class="wfield-hint">WeCom Markdown keeps structure compact with links and emphasis. Plain text is safest for bare clients.</div>
+        <div class="wfield-hint" data-i18n="ui:WeCom Markdown keeps structure compact with links and emphasis. Plain text is safest for bare clients.">WeCom Markdown keeps structure compact with links and emphasis. Plain text is safest for bare clients.</div>
       </div>`,
   },
   {
@@ -412,12 +412,12 @@ export const CHANNELS = [
     setupLabel: "Twilio Console",
     fields: (c) => `
       <div class="wfield">
-        <label>Account SID</label>
+        <label data-i18n="ui:Account SID">Account SID</label>
         <input type="text" id="wa-account-sid" autocomplete="off"
                placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" value="${escHtml(c.account_sid)}">
       </div>
       <div class="wfield">
-        <label>Auth Token</label>
+        <label data-i18n="ui:Auth Token">Auth Token</label>
         <input type="password" id="wa-auth-token" autocomplete="off"
                placeholder="Twilio Auth Token" value="${escHtml(c.auth_token)}">
         <div class="wfield-hint">${_credHint(c.auth_token_set)}
@@ -425,30 +425,30 @@ export const CHANNELS = [
         </div>
       </div>
       <div class="wfield">
-        <label>From Number</label>
+        <label data-i18n="ui:From Number">From Number</label>
         <input type="text" id="wa-from-number" autocomplete="off"
                placeholder="whatsapp:+14155238886" value="${escHtml(c.from_number)}">
       </div>
       <div class="wfield">
-        <label>Agent</label>
+        <label data-i18n="ui:Agent">Agent</label>
         <input type="text" id="wa-agent" value="${escHtml(c.agent)}" placeholder="default">
       </div>
       <div class="wfield">
-        <label>Workspace <span class="wfield-optional">(optional)</span></label>
+        <label>Workspace <span class="wfield-optional" data-i18n="ui:(optional)">(optional)</span></label>
         <input type="text" id="wa-workspace" value="${escHtml(c.workspace || '')}" placeholder="default">
       </div>
       <div class="wfield">
-        <label>Sender Allowlist <span class="wfield-optional">(optional)</span></label>
+        <label>Sender Allowlist <span class="wfield-optional" data-i18n="ui:(optional)">(optional)</span></label>
         <input type="text" id="wa-allowlist" value="${escHtml(c.allowlist)}"
                placeholder="whatsapp:+8613800138000, whatsapp:+12025550199">
-        <div class="wfield-hint">Comma-separated sender numbers. Empty = accept any inbound sender routed by Twilio.</div>
+        <div class="wfield-hint" data-i18n="ui:Comma-separated sender numbers. Empty = accept any inbound sender routed by Twilio.">Comma-separated sender numbers. Empty = accept any inbound sender routed by Twilio.</div>
       </div>
       <div class="wfield">
-        <label>Reply protocol</label>
+        <label data-i18n="ui:Reply protocol">Reply protocol</label>
         <select id="wa-render-mode">
-          <option value="plain"${(c.render_mode || "plain")==="plain" ? " selected" : ""}>Plain text</option>
+          <option value="plain"${(c.render_mode || "plain")==="plain" ? " selected" : ""} data-i18n="ui:Plain text">Plain text</option>
         </select>
-        <div class="wfield-hint">WhatsApp currently uses a plain-text-first renderer with attachment-aware context.</div>
+        <div class="wfield-hint" data-i18n="ui:WhatsApp currently uses a plain-text-first renderer with attachment-aware context.">WhatsApp currently uses a plain-text-first renderer with attachment-aware context.</div>
       </div>`,
   },
 ];

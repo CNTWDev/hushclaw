@@ -1292,10 +1292,10 @@ function _renderRuntimeStack(runtime = {}) {
         + (summary ? `<div class="session-runtime-card-summary">${escHtml(summary)}</div>` : "")
         + (meta.length ? `<div class="session-runtime-card-meta">${meta.map((part) => `<span>${escHtml(part)}</span>`).join("")}</div>` : "")
         + `<div class="session-runtime-card-detail${expanded ? "" : " hidden"}">`
-          + `<div><span class="session-runtime-detail-label">Run</span><span class="session-runtime-detail-value">${escHtml(_shortRuntimeId(runId) || "—")}</span></div>`
-          + `<div><span class="session-runtime-detail-label">Thread</span><span class="session-runtime-detail-value">${escHtml(_shortRuntimeId(item.thread_id) || "—")}</span></div>`
-          + `<div><span class="session-runtime-detail-label">Step</span><span class="session-runtime-detail-value">${escHtml(_runtimeStateLabel(step.step_type || "idle"))}</span></div>`
-          + `<div><span class="session-runtime-detail-label">Step State</span><span class="session-runtime-detail-value">${escHtml(_runtimeStateLabel(step.state || runState))}</span></div>`
+          + `<div><span class="session-runtime-detail-label" data-i18n="ui:Run">Run</span><span class="session-runtime-detail-value">${escHtml(_shortRuntimeId(runId) || "—")}</span></div>`
+          + `<div><span class="session-runtime-detail-label" data-i18n="ui:Thread">Thread</span><span class="session-runtime-detail-value">${escHtml(_shortRuntimeId(item.thread_id) || "—")}</span></div>`
+          + `<div><span class="session-runtime-detail-label" data-i18n="ui:Step">Step</span><span class="session-runtime-detail-value">${escHtml(_runtimeStateLabel(step.step_type || "idle"))}</span></div>`
+          + `<div><span class="session-runtime-detail-label" data-i18n="ui:Step State">Step State</span><span class="session-runtime-detail-value">${escHtml(_runtimeStateLabel(step.state || runState))}</span></div>`
         + `</div>`
       + `</article>`
     );
@@ -1598,7 +1598,7 @@ export function updateCurrentSessionRuntimeBar() {
     els.sessionRuntimeLog.innerHTML = visibleFeed.map((item) => {
       const label = escHtml(String(item.label || "").trim());
       const summary = escHtml(String(item.summary || "").trim());
-      const prefix = item.scope === "child" ? `<span class="session-runtime-log-scope">Child</span>` : "";
+      const prefix = item.scope === "child" ? `<span class="session-runtime-log-scope" data-i18n="ui:Child">Child</span>` : "";
       const body = summary ? `${label ? `${label} · ` : ""}${summary}` : label;
       return `<div class="session-runtime-log-item" data-level="${item.level}">${prefix}${body}</div>`;
     }).join("");

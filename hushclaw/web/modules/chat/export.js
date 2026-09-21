@@ -643,7 +643,7 @@ function _buildShareCard(bubbleEl, msgEl) {
       </div>
       <div class="cimg-brand-right">
         <div class="cimg-brand-datetime">${escHtml(datetime)}</div>
-        <div class="cimg-brand-attr">Assistant response</div>
+        <div class="cimg-brand-attr" data-i18n="ui:Assistant response">Assistant response</div>
       </div>
     </div>
   `;

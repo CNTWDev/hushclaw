@@ -65,7 +65,7 @@ export function renderSystemTab() {
           ${canClear ? `
             <label class="connector-inline" style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)">
               <input type="checkbox" class="sys-api-key-clear" data-api-key="${escHtml(key)}">
-              <span>Clear saved value on next save</span>
+              <span data-i18n="ui:Clear saved value on next save">Clear saved value on next save</span>
             </label>
           ` : ""}
         </div>
@@ -74,9 +74,9 @@ export function renderSystemTab() {
   }).join("");
   els.wizardBody.innerHTML = `
     <div class="settings-section">
-      <h3 class="settings-section-h">Language &amp; Region</h3>
+      <h3 class="settings-section-h" data-i18n="ui:Language &amp; Region">Language &amp; Region</h3>
       <div class="wfield">
-        <label>Timezone</label>
+        <label data-i18n="ui:Timezone">Timezone</label>
         <input id="sys-timezone" type="text" list="sys-tz-list"
                value="${escHtml(calendarCfg.timezone)}"
                placeholder="Auto-detected from browser">
@@ -90,28 +90,28 @@ export function renderSystemTab() {
       </div>
     </div>
     <div class="settings-section">
-      <h3 class="settings-section-h">Generation</h3>
+      <h3 class="settings-section-h" data-i18n="ui:Generation">Generation</h3>
       <div class="wfield">
-        <label>Max output tokens</label>
+        <label data-i18n="ui:Max output tokens">Max output tokens</label>
         <input type="number" id="sys-max-tokens" min="0" max="32768" step="256"
                value="${escHtml(String(wizard.maxTokens))}">
-        <div class="wfield-hint">Maximum tokens the model generates per response. Set 0 to remove app-side cap (provider default still applies).</div>
+        <div class="wfield-hint" data-i18n="ui:Maximum tokens the model generates per response. Set 0 to remove app-side cap (provider default still applies).">Maximum tokens the model generates per response. Set 0 to remove app-side cap (provider default still applies).</div>
       </div>
       <div class="wfield">
-        <label>Max tool rounds</label>
+        <label data-i18n="ui:Max tool rounds">Max tool rounds</label>
         <input type="number" id="sys-max-tool-rounds" min="1" max="20" step="1"
                value="${escHtml(String(wizard.maxToolRounds))}">
-        <div class="wfield-hint">Maximum tool rounds before one final no-tool summary call. HushClaw caps this safety limit at 20.</div>
+        <div class="wfield-hint" data-i18n="ui:Maximum tool rounds before one final no-tool summary call. HushClaw caps this safety limit at 20.">Maximum tool rounds before one final no-tool summary call. HushClaw caps this safety limit at 20.</div>
       </div>
       <div class="wfield">
-        <label>System prompt</label>
+        <label data-i18n="ui:System prompt">System prompt</label>
         <div class="connector-row">
           <div class="connector-meta">
             <span class="connector-name">${customPrompt ? "Custom prompt" : "Built-in default"}</span>
             <span class="connector-desc">${customPrompt ? "This installation overrides the built-in agent prompt." : "HushClaw keeps the default prompt in code and does not write it to your config file."}</span>
           </div>
-          <button type="button" id="sys-system-prompt-customize" class="secondary small" style="${customPrompt ? "display:none" : ""}">Customize</button>
-          <button type="button" id="sys-system-prompt-reset" class="secondary small" style="${customPrompt ? "" : "display:none"}">Reset to default</button>
+          <button type="button" id="sys-system-prompt-customize" class="secondary small" style="${customPrompt ? "display:none" : ""}" data-i18n="ui:Customize">Customize</button>
+          <button type="button" id="sys-system-prompt-reset" class="secondary small" style="${customPrompt ? "" : "display:none"}" data-i18n="ui:Reset to default">Reset to default</button>
         </div>
         <textarea id="sys-system-prompt" rows="8"
                   style="width:100%;box-sizing:border-box;resize:vertical;margin-top:8px;${customPrompt ? "" : "display:none"}"
@@ -120,32 +120,32 @@ export function renderSystemTab() {
       </div>
     </div>
     <div class="settings-section">
-      <h3 class="settings-section-h">Appearance</h3>
+      <h3 class="settings-section-h" data-i18n="ui:Appearance">Appearance</h3>
       <div class="wfield">
-        <label>Brightness</label>
-        <p class="wdesc" style="margin:0 0 6px">The HushClaw design system is fixed. Auto follows your OS appearance setting.</p>
+        <label data-i18n="ui:Brightness">Brightness</label>
+        <p class="wdesc" style="margin:0 0 6px" data-i18n="ui:The HushClaw design system is fixed. Auto follows your OS appearance setting.">The HushClaw design system is fixed. Auto follows your OS appearance setting.</p>
         <div class="theme-mode-group" role="radiogroup" aria-label="Theme mode">
           <label class="theme-mode-option">
             <input type="radio" name="ui-theme-mode" value="auto" ${themeMode === "auto" ? "checked" : ""}>
-            <span>Auto (System)</span>
+            <span data-i18n="ui:Auto (System)">Auto (System)</span>
           </label>
           <label class="theme-mode-option">
             <input type="radio" name="ui-theme-mode" value="light" ${themeMode === "light" ? "checked" : ""}>
-            <span>Light</span>
+            <span data-i18n="ui:Light">Light</span>
           </label>
           <label class="theme-mode-option">
             <input type="radio" name="ui-theme-mode" value="dark" ${themeMode === "dark" ? "checked" : ""}>
-            <span>Dark</span>
+            <span data-i18n="ui:Dark">Dark</span>
           </label>
         </div>
       </div>
     </div>
     <div class="settings-section">
-      <h3 class="settings-section-h">Developer Mode</h3>
+      <h3 class="settings-section-h" data-i18n="ui:Developer Mode">Developer Mode</h3>
       <div class="connector-row">
         <div class="connector-meta">
-          <span class="connector-name">Extended runtime diagnostics</span>
-          <span class="connector-desc">Keep the chat layout unchanged; add tool input/result previews to the Runtime monitor and enable advanced update controls</span>
+          <span class="connector-name" data-i18n="ui:Extended runtime diagnostics">Extended runtime diagnostics</span>
+          <span class="connector-desc" data-i18n="ui:Keep the chat layout unchanged; add tool input/result previews to the Runtime monitor and enable advanced update controls">Keep the chat layout unchanged; add tool input/result previews to the Runtime monitor and enable advanced update controls</span>
         </div>
         <label class="toggle">
           <input type="checkbox" id="sys-dev-mode" ${(() => { try { return localStorage.getItem("hushclaw.dev.mode") === "1"; } catch { return false; } })() ? "checked" : ""}>
@@ -153,16 +153,16 @@ export function renderSystemTab() {
         </label>
       </div>
       <div style="margin-top:10px">
-        <a href="/ui-lab.html" target="_blank" rel="noopener" class="settings-inline-link">Open AI interaction UI Lab ↗</a>
+        <a href="/ui-lab.html" target="_blank" rel="noopener" class="settings-inline-link" data-i18n="ui:Open AI interaction UI Lab ↗">Open AI interaction UI Lab ↗</a>
       </div>
     </div>
     <div class="settings-section">
-      <h3 class="settings-section-h">Updates</h3>
-      <p class="wdesc">Check GitHub releases and upgrade after your confirmation.</p>
+      <h3 class="settings-section-h" data-i18n="ui:Updates">Updates</h3>
+      <p class="wdesc" data-i18n="ui:Check GitHub releases and upgrade after your confirmation.">Check GitHub releases and upgrade after your confirmation.</p>
       <div class="connector-row">
         <div class="connector-meta">
-          <span class="connector-name">Auto-check for updates</span>
-          <span class="connector-desc">Background check based on interval</span>
+          <span class="connector-name" data-i18n="ui:Auto-check for updates">Auto-check for updates</span>
+          <span class="connector-desc" data-i18n="ui:Background check based on interval">Background check based on interval</span>
         </div>
         <label class="toggle">
           <input type="checkbox" id="upd-auto-check" ${wizard.updateAutoCheckEnabled ? "checked" : ""}>
@@ -170,26 +170,26 @@ export function renderSystemTab() {
         </label>
       </div>
       <div class="wfield" style="margin-top:8px">
-        <label>Check interval (hours)</label>
+        <label data-i18n="ui:Check interval (hours)">Check interval (hours)</label>
         <input type="number" id="upd-interval-hours" min="1" max="168" step="1"
                value="${escHtml(String(wizard.updateCheckIntervalHours || 24))}">
       </div>
       <div class="wfield">
-        <label>Channel</label>
+        <label data-i18n="ui:Channel">Channel</label>
         <select id="upd-channel">
-          <option value="stable" ${wizard.updateChannel === "stable" ? "selected" : ""}>stable</option>
-          <option value="prerelease" ${wizard.updateChannel === "prerelease" ? "selected" : ""}>prerelease</option>
+          <option value="stable" ${wizard.updateChannel === "stable" ? "selected" : ""} data-i18n="ui:stable">stable</option>
+          <option value="prerelease" ${wizard.updateChannel === "prerelease" ? "selected" : ""} data-i18n="ui:prerelease">prerelease</option>
         </select>
       </div>
       <div id="upd-status" class="wfield-hint" style="margin-top:6px"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-        <button type="button" id="upd-check-btn" class="secondary">Check now</button>
-        <button type="button" id="upd-upgrade-btn" class="secondary">Upgrade now</button>
-        <button type="button" id="upd-force-btn" class="secondary" style="display:none;opacity:.7;font-size:11px" title="Dev mode: skip version check and trigger upgrade immediately">Force Upgrade ⚡</button>
+        <button type="button" id="upd-check-btn" class="secondary" data-i18n="ui:Check now">Check now</button>
+        <button type="button" id="upd-upgrade-btn" class="secondary" data-i18n="ui:Upgrade now">Upgrade now</button>
+        <button type="button" id="upd-force-btn" class="secondary" style="display:none;opacity:.7;font-size:11px" title="Dev mode: skip version check and trigger upgrade immediately" data-i18n="ui:Force Upgrade ⚡">Force Upgrade ⚡</button>
       </div>
     </div>
     <div class="settings-section">
-      <h3 class="settings-section-h">API Rate Limits</h3>
+      <h3 class="settings-section-h" data-i18n="ui:API Rate Limits">API Rate Limits</h3>
       <p class="wdesc">
         HushClaw does not control provider-side rate limits or credit quotas.
         If you see errors like "Key limit exceeded" (e.g., on OpenRouter), manage your
@@ -214,22 +214,22 @@ export function renderSystemTab() {
       </div>
     </div>
     <div class="settings-section">
-      <h3 class="settings-section-h">Tool API Keys</h3>
+      <h3 class="settings-section-h" data-i18n="ui:Tool API Keys">Tool API Keys</h3>
       <p class="wdesc">
         Configure credentials for built-in tools and future skills. HushClaw stores saved values in its local secret store and keeps only stable references in
         <code>[api_keys]</code>. The browser only sees configured/unconfigured status and metadata.
       </p>
-      ${apiKeyCards || `<div class="wfield-hint">No tool API keys are registered yet.</div>`}
+      ${apiKeyCards || `<div class="wfield-hint" data-i18n="ui:No tool API keys are registered yet.">No tool API keys are registered yet.</div>`}
     </div>
     <div class="settings-section">
-      <h3 class="settings-section-h">Browser</h3>
+      <h3 class="settings-section-h" data-i18n="ui:Browser">Browser</h3>
       <p class="wdesc">
         Enables JS-rendered page fetching, clicking, form filling, and screenshots.
         Playwright (Chromium) is installed automatically on first use.
       </p>
       <div class="connector-row">
         <div class="connector-meta">
-          <span class="connector-name">Enable browser tools</span>
+          <span class="connector-name" data-i18n="ui:Enable browser tools">Enable browser tools</span>
           <span class="connector-badge ${browser.playwright_installed ? 'badge-set' : ''}">
             ${browser.playwright_installed ? 'playwright installed' : 'auto-install on first use'}
           </span>
@@ -243,8 +243,8 @@ export function renderSystemTab() {
       <div id="br-fields" style="${browser.enabled ? '' : 'display:none'}">
         <div class="connector-row">
           <div class="connector-meta">
-            <span class="connector-name">Headless mode</span>
-            <span class="connector-desc">Hide browser window (disable for debugging)</span>
+            <span class="connector-name" data-i18n="ui:Headless mode">Headless mode</span>
+            <span class="connector-desc" data-i18n="ui:Hide browser window (disable for debugging)">Hide browser window (disable for debugging)</span>
           </div>
           <label class="toggle">
             <input type="checkbox" id="br-headless" ${browser.headless ? 'checked' : ''}>
@@ -252,13 +252,13 @@ export function renderSystemTab() {
           </label>
         </div>
         <div class="wfield" style="margin-top:8px">
-          <label>Operation timeout (seconds)</label>
+          <label data-i18n="ui:Operation timeout (seconds)">Operation timeout (seconds)</label>
           <input type="number" id="br-timeout" min="5" max="120" step="5"
                  value="${browser.timeout}">
         </div>
         <div class="connector-row" style="margin-top:10px">
           <div class="connector-meta">
-            <span class="connector-name">Use My Chrome</span>
+            <span class="connector-name" data-i18n="ui:Use My Chrome">Use My Chrome</span>
             <span class="connector-desc">
               Connect HushClaw to your real Google Chrome over the Chrome DevTools Protocol (CDP).
               Uses your normal Chrome profile (cookies and logins) when the app starts Chrome with
@@ -273,35 +273,35 @@ export function renderSystemTab() {
           </label>
         </div>
         <div id="br-cdp-url-row" class="wfield" style="margin-top:8px;${browser.use_user_chrome ? '' : 'display:none'}">
-          <label>Chrome Debugging URL</label>
+          <label data-i18n="ui:Chrome Debugging URL">Chrome Debugging URL</label>
           <input type="text" id="br-cdp-url"
                  placeholder="http://localhost:9222"
                  value="${escHtml(browser.remote_debugging_url || 'http://localhost:9222')}">
           <div class="wfield-hint">
             Default <code>http://localhost:9222</code> — only change if you use a custom port.
-            After you save settings, the <strong>first browser tool</strong> in a session connects
+            After you save settings, the <strong data-i18n="ui:first browser tool">first browser tool</strong> in a session connects
             here automatically (no need to type a command).
           </div>
           <details class="browser-cdp-guide">
-            <summary>Step-by-step: connect your Chrome</summary>
+            <summary data-i18n="ui:Step-by-step: connect your Chrome">Step-by-step: connect your Chrome</summary>
             <ol class="browser-cdp-guide-steps">
               <li>
                 Leave the URL as <code>http://localhost:9222</code> unless you deliberately run
                 Chrome with another debugging port.
               </li>
               <li>
-                <strong>Save</strong> these settings. Restart HushClaw if the app says a restart is required.
+                <strong data-i18n="ui:Save">Save</strong> these settings. Restart HushClaw if the app says a restart is required.
               </li>
               <li>
-                <strong>Quit Chrome fully</strong> before the first connection
+                <strong data-i18n="ui:Quit Chrome fully">Quit Chrome fully</strong> before the first connection
                 (macOS: <kbd>Cmd</kbd>+<kbd>Q</kbd> on Chrome;
                 Windows: close all windows and use &quot;Exit&quot; from the Chrome tray icon if it stays running).
                 That releases the profile lock so HushClaw can start Chrome with debugging enabled while still using
-                your <strong>default profile</strong> (same bookmarks, extensions, and saved logins as everyday use).
+                your <strong data-i18n="ui:default profile">default profile</strong> (same bookmarks, extensions, and saved logins as everyday use).
               </li>
               <li>
                 Use the assistant as usual. The first time a browser tool runs, HushClaw tries to connect to that URL.
-                If nothing is listening yet, it waits up to <strong>about 90 seconds</strong> for Chrome to finish
+                If nothing is listening yet, it waits up to <strong data-i18n="ui:about 90 seconds">about 90 seconds</strong> for Chrome to finish
                 quitting, then starts Chrome with <code>--remote-debugging-port=9222</code>.
                 If you already started Chrome yourself with that flag, it connects immediately instead.
               </li>
@@ -309,7 +309,7 @@ export function renderSystemTab() {
                 Sign in on the site you need inside that Chrome window if prompted; then run browser actions again.
               </li>
               <li>
-                <strong>Privacy:</strong> while remote debugging is on, other software on <em>this computer</em> could
+                <strong data-i18n="ui:Privacy:">Privacy:</strong> while remote debugging is on, other software on <em>this computer</em> could
                 attach to the browser. Use only on a machine you trust.
               </li>
             </ol>
@@ -322,9 +322,9 @@ export function renderSystemTab() {
       </div>
     </div>
     <div class="settings-section">
-      <h3 class="settings-section-h">Skills Directories</h3>
+      <h3 class="settings-section-h" data-i18n="ui:Skills Directories">Skills Directories</h3>
       <div class="wfield">
-        <label>User Skills Directory</label>
+        <label data-i18n="ui:User Skills Directory">User Skills Directory</label>
         <input type="text" id="sys-user-skill-dir"
                placeholder="Default: ~/Library/Application Support/hushclaw/user-skills"
                value="${escHtml(wizard.userSkillDir || '')}">
@@ -334,7 +334,7 @@ export function renderSystemTab() {
         </div>
       </div>
       <div class="wfield">
-        <label>Workspace Directory <span class="wfield-optional">(optional)</span></label>
+        <label>Workspace Directory <span class="wfield-optional" data-i18n="ui:(optional)">(optional)</span></label>
         <input type="text" id="sys-workspace-dir"
                placeholder="Auto: .hushclaw/ in cwd"
                value="${escHtml(wizard.workspaceDir || '')}">
@@ -345,7 +345,7 @@ export function renderSystemTab() {
       </div>
     </div>
     <div class="settings-section" id="ws-registry-section">
-      <h3 class="settings-section-h">Workspace Registry <span class="wfield-optional" style="text-transform:none;letter-spacing:0;font-size:10.5px">(optional)</span></h3>
+      <h3 class="settings-section-h">Workspace Registry <span class="wfield-optional" style="text-transform:none;letter-spacing:0;font-size:10.5px" data-i18n="ui:(optional)">(optional)</span></h3>
       <p class="wdesc">
         Named workspaces let you switch SOUL.md / USER.md / AGENTS.md / skills context per conversation without restarting.
         Create them here, then pick one from the sidebar before chatting.
@@ -361,14 +361,14 @@ export function renderSystemTab() {
           <div class="ws-entry-actions">
             <button class="secondary small ws-move-btn" data-ws-idx="${i}" data-ws-dir="-1" title="Move up" ${i === 0 ? "disabled" : ""}>↑</button>
             <button class="secondary small ws-move-btn" data-ws-idx="${i}" data-ws-dir="1" title="Move down" ${i === (wizard.workspacesList || []).length - 1 ? "disabled" : ""}>↓</button>
-            <button class="secondary small ws-init-btn" data-ws-idx="${i}" title="Create SOUL.md and USER.md for this workspace">Init Files</button>
+            <button class="secondary small ws-init-btn" data-ws-idx="${i}" title="Create SOUL.md and USER.md for this workspace" data-i18n="ui:Init Files">Init Files</button>
             <button class="secondary small ws-remove-btn" data-ws-idx="${i}" title="Remove">✕</button>
           </div>
         </div>`).join("")}
         ${!(wizard.workspacesList || []).length ? `
           <div class="ws-list-empty">
-            <div class="ws-list-empty-title">No workspaces configured yet.</div>
-            <div class="ws-list-empty-body">Create one here to make it show up in the sidebar workspace strip.</div>
+            <div class="ws-list-empty-title" data-i18n="ui:No workspaces configured yet.">No workspaces configured yet.</div>
+            <div class="ws-list-empty-body" data-i18n="ui:Create one here to make it show up in the sidebar workspace strip.">Create one here to make it show up in the sidebar workspace strip.</div>
           </div>` : ""}
       </div>
       <div class="wfield-hint" id="ws-registry-status" style="margin-top:8px"></div>
@@ -376,20 +376,20 @@ export function renderSystemTab() {
         <input type="text" id="ws-new-name" placeholder="name (e.g. project-alpha)" autocomplete="off" style="flex:0 0 140px">
         <input type="text" id="ws-new-path" placeholder="path (e.g. ~/workspace/alpha)" autocomplete="off" style="flex:1">
         <input type="text" id="ws-new-desc" placeholder="description (optional)" autocomplete="off" style="flex:1">
-        <button id="ws-add-create">Create & Initialize</button>
-        <button id="ws-add-confirm" class="secondary">Add Only</button>
+        <button id="ws-add-create" data-i18n="ui:Create &amp; Initialize">Create & Initialize</button>
+        <button id="ws-add-confirm" class="secondary" data-i18n="ui:Add Only">Add Only</button>
         <button id="ws-add-cancel" class="secondary">✕</button>
       </div>
       <div style="margin-top:8px">
-        <button id="ws-add-open" class="secondary small">+ New Workspace</button>
+        <button id="ws-add-open" class="secondary small" data-i18n="ui:+ New Workspace">+ New Workspace</button>
       </div>
     </div>
     <div class="settings-section">
-      <h3 class="settings-section-h">Tool Profile</h3>
+      <h3 class="settings-section-h" data-i18n="ui:Tool Profile">Tool Profile</h3>
       <div class="wfield">
-        <label>Profile preset</label>
+        <label data-i18n="ui:Profile preset">Profile preset</label>
         <select id="sys-tools-profile">
-          <option value=""       ${wizard.toolsProfile === ""         ? "selected" : ""}>— Default (use enabled list) —</option>
+          <option value=""       ${wizard.toolsProfile === ""         ? "selected" : ""} data-i18n="ui:— Default (use enabled list) —">— Default (use enabled list) —</option>
           <option value="full"   ${wizard.toolsProfile === "full"     ? "selected" : ""}>full — all built-in tools</option>
           <option value="coding" ${wizard.toolsProfile === "coding"   ? "selected" : ""}>coding — file ops, shell, memory, todos</option>
           <option value="messaging" ${wizard.toolsProfile === "messaging" ? "selected" : ""}>messaging — email, calendar, memory</option>

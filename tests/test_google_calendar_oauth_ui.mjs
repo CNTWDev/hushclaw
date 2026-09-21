@@ -42,7 +42,7 @@ async function harness({ saveId = 'save-1' } = {}) {
     '../modal.js': { openDialog(options) { rendered = options.html; }, closeModal() {}, openConfirm: async () => false },
     '../http.js': { withApiKey: (url, key) => url + '?api_key=' + key },
     '../settings/providers.js': { CHANNELS: [] },
-    '../i18n.js': { t: key => key },
+    '../i18n.js': { t: key => key, uiText: text => text },
   };
   const context = vm.createContext({ document, window, URLSearchParams, location: { search: '?api_key=local-key', origin: 'http://localhost:8765' } });
   const source = await readFile(new URL('../hushclaw/web/modules/panels/app_connectors.js', import.meta.url), 'utf8');

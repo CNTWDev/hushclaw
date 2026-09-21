@@ -29,7 +29,7 @@ function _ensureOverlay() {
             <h3 class="app-modal-title" id="app-modal-title"></h3>
           </div>
         </div>
-        <button type="button" class="app-modal-close icon-btn" id="app-modal-close" aria-label="Close">✕</button>
+        <button type="button" class="app-modal-close icon-btn" id="app-modal-close" aria-label="Close" data-i18n-aria="ui:Close">✕</button>
       </div>
       <div class="app-modal-body" id="app-modal-body"></div>
       <div class="app-modal-footer" id="app-modal-footer"></div>

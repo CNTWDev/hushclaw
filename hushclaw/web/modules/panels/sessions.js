@@ -10,7 +10,7 @@ import {
 } from "../state.js";
 import { noteSessionSwitchRequested, resetChatSessionUiState } from "../chat.js";
 import { openConfirm, openDialog, closeModal } from "../modal.js";
-import { t } from "../i18n.js";
+import { t, uiText } from "../i18n.js";
 import { refreshChatStats } from "../stats.js";
 
 // ── Memories pagination state ─────────────────────────────────────────────
@@ -186,7 +186,7 @@ function _startSessionRename(sessionEl) {
   wrap.className = "session-title-edit-wrap";
   wrap.innerHTML = `
     <input class="session-title-input" type="text" maxlength="80" value="${escHtml(title)}" aria-label="Session title">
-    <button class="session-title-save" title="Save session title">Save</button>
+    <button class="session-title-save" title="Save session title" data-i18n="ui:Save">Save</button>
   `;
   titleRow.insertBefore(wrap, titleRow.firstChild);
   const input = wrap.querySelector(".session-title-input");
@@ -314,7 +314,7 @@ function _profileCloudItems(items, limit = 18) {
 function _renderProfileCloud(items, { compact = false, animated = false } = {}) {
   const facts = _profileCloudItems(items, compact ? 12 : 28);
   if (!facts.length) {
-    return `<div class="mem-ov-empty">No profile signals yet.</div>`;
+    return `<div class="mem-ov-empty" data-i18n="ui:No profile signals yet.">No profile signals yet.</div>`;
   }
   const renderWord = (f) => {
     const pct = _confidencePct(f.confidence);
@@ -360,7 +360,7 @@ function _beliefStrength(model) {
 function _renderBeliefConstellation(items) {
   const beliefs = (Array.isArray(items) ? items : []).slice(0, 7);
   if (!beliefs.length) {
-    return `<div class="mem-ov-empty">No belief model has formed yet.</div>`;
+    return `<div class="mem-ov-empty" data-i18n="ui:No belief model has formed yet.">No belief model has formed yet.</div>`;
   }
   return beliefs.map((b) => {
     const strength = _beliefStrength(b);
@@ -383,7 +383,7 @@ function _renderBeliefConstellation(items) {
 function _renderLearningTimeline(reflections) {
   const refs = (Array.isArray(reflections) ? reflections : []).slice(0, 5);
   if (!refs.length) {
-    return `<div class="mem-ov-empty">No task reflections yet.</div>`;
+    return `<div class="mem-ov-empty" data-i18n="ui:No task reflections yet.">No task reflections yet.</div>`;
   }
   return refs.map((r) => {
     const ok = !!r.success;
@@ -415,7 +415,7 @@ function _renderIdentityMetric(label, value, detail = "") {
 function _renderMemoryStrata(items) {
   const list = (Array.isArray(items) ? items : []).slice(0, 6);
   if (!list.length) {
-    return `<div class="mem-ov-empty">No decaying recent memories yet.</div>`;
+    return `<div class="mem-ov-empty" data-i18n="ui:No decaying recent memories yet.">No decaying recent memories yet.</div>`;
   }
   return list.map((m, idx) => {
     const weight = _weightPct(m);
@@ -532,7 +532,7 @@ function _buildSessionRow(s) {
           <button class="session-inline-action session-rename-btn ui-icon-action" data-session-id="${escHtml(s.session_id || "")}" title="Rename session" aria-label="Rename session">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 3 5 5-12 12-6 1 1-6ZM14 5l5 5"/></svg>
           </button>
-          <button class="session-inline-action session-move-btn ui-icon-action" data-session-id="${escHtml(s.session_id || "")}" title="Move to workspace" aria-label="Move to workspace">
+          <button class="session-inline-action session-move-btn ui-icon-action" data-session-id="${escHtml(s.session_id || "")}" title="Move to workspace" aria-label="Move to workspace" data-i18n-title="ui:Move to workspace" data-i18n-aria="ui:Move to workspace">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h16m-4-4 4 4-4 4M20 16H4m4-4-4 4 4 4"/></svg>
           </button>
           <button class="session-inline-action session-delete-btn ui-icon-action ui-icon-action--danger" data-session-id="${escHtml(s.session_id || "")}" title="Delete session" aria-label="Delete session">
@@ -644,10 +644,10 @@ export function renderSessions(items, hasMore = false, append = false) {
     wrap.className = "load-more-row";
     const btn = document.createElement("button");
     btn.className = "secondary load-more-btn";
-    btn.textContent = "Load more…";
+    btn.textContent = uiText("Load more…");
     btn.addEventListener("click", () => {
       btn.disabled = true;
-      btn.textContent = "Loading…";
+      btn.textContent = uiText("Loading…");
       send({
         type: "list_sessions",
         workspace: state.activeWorkspace || "",
@@ -879,7 +879,7 @@ function _showMoveWorkspacePopover(anchorEl, sessionId, currentWorkspace) {
 
   const pop = document.createElement("div");
   pop.className = "session-move-popover";
-  pop.innerHTML = `<div class="session-move-popover-title">Move to workspace</div>` +
+  pop.innerHTML = `<div class="session-move-popover-title" data-i18n="ui:Move to workspace">Move to workspace</div>` +
     workspaces.map(ws => `
       <button class="session-move-popover-item${ws.name === currentWorkspace ? " active" : ""}" data-ws="${escHtml(ws.name)}">
         ${escHtml(ws.label)}${ws.name === currentWorkspace ? " ✓" : ""}
@@ -980,7 +980,8 @@ export function renderWorkspaceSelector(workspacesList) {
     btn.dataset.ws = name;
     btn.dataset.tone = _workspaceTone(name);
     btn.title = title;
-    btn.textContent = label;
+    btn.textContent = name ? label : uiText("Default");
+    if (!name) { btn.dataset.i18n = "ui:Default"; btn.dataset.i18nTitle = "ui:Default workspace"; btn.title = uiText("Default workspace"); }
     btn.setAttribute("aria-label", `${label} workspace`);
     btn.setAttribute("aria-pressed", (state.activeWorkspace === (name || null)) ? "true" : "false");
     btn.addEventListener("click", () => _switchWorkspace(name || null));
@@ -1013,7 +1014,7 @@ export function renderMemories(items, hasMore = false, append = false) {
   }
 
   if (!items.length && !append) {
-    els.memoriesList.innerHTML = '<div class="empty-state">No memories found.</div>';
+    els.memoriesList.innerHTML = '<div class="empty-state" data-i18n="ui:No memories found.">No memories found.</div>';
     return;
   }
 
@@ -1035,7 +1036,7 @@ export function renderMemories(items, hasMore = false, append = false) {
   if (!append) {
     const hdr = document.createElement("div");
     hdr.className = "mem-list-header";
-    hdr.innerHTML = `<span>Kind</span><span>Memory</span><span class="mem-col-r">Score</span><span class="mem-col-r">Date</span><span></span>`;
+    hdr.innerHTML = `<span data-i18n="ui:Kind">Kind</span><span data-i18n="ui:Memory">Memory</span><span class="mem-col-r" data-i18n="ui:Score">Score</span><span class="mem-col-r" data-i18n="ui:Date">Date</span><span></span>`;
     list.appendChild(hdr);
   }
 
@@ -1133,10 +1134,10 @@ export function renderMemories(items, hasMore = false, append = false) {
     wrap.className = "load-more-row";
     const btn = document.createElement("button");
     btn.className = "secondary load-more-btn";
-    btn.textContent = "Load more…";
+    btn.textContent = uiText("Load more…");
     btn.addEventListener("click", () => {
       btn.disabled = true;
-      btn.textContent = "Loading…";
+      btn.textContent = uiText("Loading…");
       const nextOffset = _memOffset;
       sendListMemories(_memQuery, 50, _memIncludeAuto, nextOffset, _memKinds);
     });
@@ -1220,20 +1221,20 @@ export function renderMemoryOverview(data) {
   els.memoriesOverview.innerHTML = `
     <section class="mem-identity-hero">
       <div class="mem-identity-copy">
-        <div class="mem-ov-eyebrow">Identity Core</div>
-        <h2><span>用户画像、信念与记忆</span><span>正在形成可追溯的心智星图</span></h2>
-        <p>Context stays first. Memories decay. Profile stabilizes. Beliefs evolve.</p>
+        <div class="mem-ov-eyebrow" data-i18n="ui:Identity Core">Identity Core</div>
+        <h2><span data-i18n="ui:Profile, beliefs and memories">用户画像、信念与记忆</span><span data-i18n="ui:Building an evidence-backed memory map">正在形成可追溯的心智星图</span></h2>
+        <p data-i18n="ui:Context stays first. Memories decay. Profile stabilizes. Beliefs evolve.">Context stays first. Memories decay. Profile stabilizes. Beliefs evolve.</p>
         <div class="mem-time-priority">
-          <span>Concept: Now first</span><span>Actual: Profile</span><span>Beliefs</span><span>Working state</span><span>Recall</span>
+          <span>Concept: Now first</span><span>Actual: Profile</span><span data-i18n="ui:Beliefs">Beliefs</span><span data-i18n="ui:Working state">Working state</span><span data-i18n="ui:Recall">Recall</span>
         </div>
       </div>
       <div class="mem-identity-core" aria-label="User identity core">
-        <div class="mem-core-ring ring-outer"><span>Recent Memory</span></div>
-        <div class="mem-core-ring ring-middle"><span>Beliefs</span></div>
-        <div class="mem-core-ring ring-inner"><span>Profile</span></div>
+        <div class="mem-core-ring ring-outer"><span data-i18n="ui:Recent Memory">Recent Memory</span></div>
+        <div class="mem-core-ring ring-middle"><span data-i18n="ui:Beliefs">Beliefs</span></div>
+        <div class="mem-core-ring ring-inner"><span data-i18n="ui:Profile">Profile</span></div>
         <div class="mem-core-orb">
           <strong>${Number(profile.total || 0)}</strong>
-          <span>Portrait facts</span>
+          <span data-i18n="ui:Portrait facts">Portrait facts</span>
         </div>
         <i class="core-node node-a"></i>
         <i class="core-node node-b"></i>
@@ -1252,20 +1253,20 @@ export function renderMemoryOverview(data) {
 
     <div class="mem-identity-grid">
       <section class="mem-persona-panel mem-nebula-panel">
-        <div class="mem-ov-card-hdr"><span>Portrait Nebula</span><b>Top ${profileFacts.length} / ${Number(profile.total || 0)}</b></div>
+        <div class="mem-ov-card-hdr"><span data-i18n="ui:Portrait Nebula">Portrait Nebula</span><b>Top ${profileFacts.length} / ${Number(profile.total || 0)}</b></div>
         <div class="mem-profile-cloud compact animated">${_renderProfileCloud(profileFacts, { compact: true, animated: true })}</div>
       </section>
       <section class="mem-persona-panel mem-persona-panel-beliefs">
-        <div class="mem-ov-card-hdr"><span>Belief Map</span><b>Top ${beliefDomains.length} / ${Number(beliefs.total || 0)}</b></div>
+        <div class="mem-ov-card-hdr"><span data-i18n="ui:Belief Map">Belief Map</span><b>Top ${beliefDomains.length} / ${Number(beliefs.total || 0)}</b></div>
         ${_renderBeliefConstellationPanel(beliefDomains)}
       </section>
       <section class="mem-persona-panel mem-persona-panel-reflect">
-        <div class="mem-ov-card-hdr"><span>Learning Loop</span><b>Latest ${lessons.length} / ${Number(reflections.total_recent || 0)}</b></div>
+        <div class="mem-ov-card-hdr"><span data-i18n="ui:Learning Loop">Learning Loop</span><b>Latest ${lessons.length} / ${Number(reflections.total_recent || 0)}</b></div>
         ${_renderLearningPulse(lessons)}
         <div class="mem-persona-timeline">${_renderLearningTimeline(lessons)}</div>
       </section>
       <section class="mem-persona-panel mem-strata-panel">
-        <div class="mem-ov-card-hdr"><span>Memory Strata</span><b>Recent ${decayingRecent.length}</b></div>
+        <div class="mem-ov-card-hdr"><span data-i18n="ui:Memory Strata">Memory Strata</span><b>Recent ${decayingRecent.length}</b></div>
         <div class="mem-strata-list">${_renderMemoryStrata(decayingRecent)}</div>
       </section>
     </div>
@@ -1291,7 +1292,7 @@ export function renderProfileSnapshot() {
     return `<div class="mem-profile-block"><div class="mem-profile-title">${escHtml(title)}</div>${body}</div>`;
   }).join("");
   els.memoriesProfile.innerHTML = `
-    <div class="mem-profile-header">User Profile Snapshot</div>
+    <div class="mem-profile-header" data-i18n="ui:User Profile Snapshot">User Profile Snapshot</div>
     <div class="mem-profile-grid">${html}</div>
   `;
 }
@@ -1302,7 +1303,7 @@ export function renderBeliefModels(items) {
   if (!els.memoriesBeliefs) return;
   if (!items || !items.length) {
     els.memoriesBeliefs.innerHTML = `
-      <div class="mem-beliefs-hdr"><span class="mem-beliefs-label">Thinking Trajectory</span></div>
+      <div class="mem-beliefs-hdr"><span class="mem-beliefs-label" data-i18n="ui:Thinking Trajectory">Thinking Trajectory</span></div>
       <div class="mem-section-empty">No belief trajectory yet.<br>Deep conversations in a topic area will be distilled by the model.</div>
     `;
     _updateOvCount("ov-beliefs-count", 0);
@@ -1349,12 +1350,12 @@ export function renderBeliefModels(items) {
           ${dateStr ? `<span class="mem-belief-date">${escHtml(dateStr)}</span>` : ""}
           <span class="mem-belief-chevron">›</span>
         </div>
-        ${m.current_stance ? `<div class="mem-belief-stance"><span>Current stance</span>${escHtml(m.current_stance)}</div>` : ""}
+        ${m.current_stance ? `<div class="mem-belief-stance"><span data-i18n="ui:Current stance">Current stance</span>${escHtml(m.current_stance)}</div>` : ""}
         ${m.summary ? `<div class="mem-belief-summary">${escHtml(m.summary)}</div>` : ""}
         ${m.trajectory ? `<div class="mem-belief-trajectory">${escHtml(m.trajectory)}</div>` : ""}
         ${driversHtml ? `<div class="mem-belief-drivers">${driversHtml}</div>` : ""}
         ${signalsHtml ? `<div class="mem-belief-signals">${signalsHtml}</div>` : ""}
-        ${entryCount ? `<div class="mem-belief-entries" data-loaded="${count}" data-total="${entryCount}" data-detail-key="${escHtml(detailsKey)}" style="display:none">${entriesHtml}${count < entryCount ? `<div class="load-more-row"><button class="secondary load-more-btn mem-belief-load-detail">Load full evidence…</button></div>` : ""}</div>` : ""}
+        ${entryCount ? `<div class="mem-belief-entries" data-loaded="${count}" data-total="${entryCount}" data-detail-key="${escHtml(detailsKey)}" style="display:none">${entriesHtml}${count < entryCount ? `<div class="load-more-row"><button class="secondary load-more-btn mem-belief-load-detail" data-i18n="ui:Load full evidence…">Load full evidence…</button></div>` : ""}</div>` : ""}
       </div>
     `;
   }).join("");
@@ -1364,7 +1365,7 @@ export function renderBeliefModels(items) {
 
   els.memoriesBeliefs.innerHTML = `
     <div class="mem-beliefs-hdr">
-      <span class="mem-beliefs-label">Thinking Trajectory</span>
+      <span class="mem-beliefs-label" data-i18n="ui:Thinking Trajectory">Thinking Trajectory</span>
       <span class="mem-beliefs-count">${items.length}</span>
     </div>
     <div class="mem-beliefs-list" id="mem-beliefs-list-body">${renderCardItems(items.slice(0, _beliefOffset))}</div>
@@ -1421,7 +1422,7 @@ function requestBeliefEntries(card, offset = 0) {
   const btn = card.querySelector(".mem-belief-load-detail");
   if (btn) {
     btn.disabled = true;
-    btn.textContent = "Loading evidence…";
+    btn.textContent = uiText("Loading evidence…");
   }
   send({
     type: "get_belief_model",
@@ -1470,7 +1471,7 @@ export function handleBeliefModelDetail(data) {
   const countEl = card.querySelector(".mem-belief-count");
   if (countEl) countEl.textContent = `${loaded}/${total}`;
   if (loaded < total) {
-    entriesEl.insertAdjacentHTML("beforeend", `<div class="load-more-row"><button class="secondary load-more-btn mem-belief-load-detail">More evidence…</button></div>`);
+    entriesEl.insertAdjacentHTML("beforeend", `<div class="load-more-row"><button class="secondary load-more-btn mem-belief-load-detail" data-i18n="ui:More evidence…">More evidence…</button></div>`);
     entriesEl.querySelector(".mem-belief-load-detail")?.addEventListener("click", () => requestBeliefEntries(card, loaded));
   }
   _wireMemorySourceLinks(entriesEl);
@@ -1479,7 +1480,7 @@ export function handleBeliefModelDetail(data) {
 export function renderBeliefModelsError(message) {
   if (!els.memoriesBeliefs) return;
   els.memoriesBeliefs.innerHTML = `
-    <div class="mem-beliefs-hdr"><span class="mem-beliefs-label">Domain Beliefs</span></div>
+    <div class="mem-beliefs-hdr"><span class="mem-beliefs-label" data-i18n="ui:Domain Beliefs">Domain Beliefs</span></div>
     <div class="mem-section-empty error-state">
       Belief models failed to load.<br>${escHtml(message || "Unknown error")}
     </div>
@@ -1497,7 +1498,7 @@ export function renderOpinionThreads(items, meta = {}) {
 
   if (!_opinionThreads.length) {
     els.memoriesOpinions.innerHTML = `
-      <div class="mem-beliefs-hdr"><span class="mem-beliefs-label">Opinion Timeline</span></div>
+      <div class="mem-beliefs-hdr"><span class="mem-beliefs-label" data-i18n="ui:Opinion Timeline">Opinion Timeline</span></div>
       <div class="mem-section-empty">No opinion timeline yet.<br>Durable viewpoint changes are extracted by the model after conversation turns.</div>
     `;
     return;
@@ -1524,7 +1525,7 @@ export function renderOpinionThreads(items, meta = {}) {
           ${dateStr ? `<span class="mem-belief-date">${escHtml(dateStr)}</span>` : ""}
           <span class="mem-belief-chevron">›</span>
         </div>
-        ${stance ? `<div class="mem-belief-stance"><span>Current stance</span>${escHtml(stance)}</div>` : ""}
+        ${stance ? `<div class="mem-belief-stance"><span data-i18n="ui:Current stance">Current stance</span>${escHtml(stance)}</div>` : ""}
         ${showSummary ? `<div class="mem-belief-summary">${escHtml(summary)}</div>` : ""}
         <div class="mem-opinion-metrics">
           <span>Confidence <b>${pct(t.confidence)}</b></span>
@@ -1539,7 +1540,7 @@ export function renderOpinionThreads(items, meta = {}) {
   const hasMore = _opinionThreads.length > _OPINION_PAGE || Boolean(meta.has_more);
   els.memoriesOpinions.innerHTML = `
     <div class="mem-beliefs-hdr">
-      <span class="mem-beliefs-label">Opinion Timeline</span>
+      <span class="mem-beliefs-label" data-i18n="ui:Opinion Timeline">Opinion Timeline</span>
       <span class="mem-beliefs-count">${_opinionThreads.length} / ${total || _opinionThreads.length}</span>
     </div>
     <div class="mem-opinion-list" id="mem-opinion-list-body">${renderItems(_opinionThreads.slice(0, offset))}</div>
@@ -1586,7 +1587,7 @@ function requestOpinionEvents(card, offset = 0) {
   const btn = card.querySelector(".mem-opinion-load-detail");
   if (btn) {
     btn.disabled = true;
-    btn.textContent = "Loading events…";
+    btn.textContent = uiText("Loading events…");
   }
   send({
     type: "get_opinion_thread",
@@ -1637,7 +1638,7 @@ export function handleOpinionThreadDetail(data) {
   eventsEl.dataset.loaded = String(loaded);
   eventsEl.dataset.total = String(total);
   if (loaded < total) {
-    eventsEl.insertAdjacentHTML("beforeend", `<div class="load-more-row"><button class="secondary load-more-btn mem-opinion-load-detail">More events…</button></div>`);
+    eventsEl.insertAdjacentHTML("beforeend", `<div class="load-more-row"><button class="secondary load-more-btn mem-opinion-load-detail" data-i18n="ui:More events…">More events…</button></div>`);
   }
   _wireMemorySourceLinks(eventsEl);
 }
@@ -1645,7 +1646,7 @@ export function handleOpinionThreadDetail(data) {
 export function renderOpinionThreadsError(message) {
   if (!els.memoriesOpinions) return;
   els.memoriesOpinions.innerHTML = `
-    <div class="mem-beliefs-hdr"><span class="mem-beliefs-label">Opinion Timeline</span></div>
+    <div class="mem-beliefs-hdr"><span class="mem-beliefs-label" data-i18n="ui:Opinion Timeline">Opinion Timeline</span></div>
     <div class="mem-section-empty error-state">
       Opinion timeline failed to load.<br>${escHtml(message || "Unknown error")}
     </div>
@@ -1667,7 +1668,7 @@ export function renderProfileFacts(items, meta = {}) {
   if (!items || !items.length) {
     if (!append) {
       els.memoriesProfile.innerHTML = `
-        <div class="mem-profile-header">User Profile</div>
+        <div class="mem-profile-header" data-i18n="ui:User Profile">User Profile</div>
         <div class="mem-section-empty">No profile data yet.<br>Profile preferences and habits are automatically extracted after tasks with tool calls.</div>
       `;
       _updateOvCount("ov-profile-count", 0);
@@ -1748,13 +1749,13 @@ export function renderProfileFacts(items, meta = {}) {
     <div class="mem-profile-header">User Profile <span class="mem-pf-total">${visibleCount} / ${total} loaded</span></div>
     <section class="mem-profile-cloud-panel">
       <div class="mem-profile-cloud-title">
-        <span>Portrait Cloud</span>
+        <span data-i18n="ui:Portrait Cloud">Portrait Cloud</span>
         <b>Top ${Math.min(28, visibleCount)} / ${total}</b>
       </div>
       <div class="mem-profile-cloud">${_renderProfileCloud(visibleItems)}</div>
     </section>
     <div class="mem-pf-content">${sectionsHtml}</div>
-    ${hasMore ? `<div class="load-more-row"><button class="secondary load-more-btn" id="mem-profile-load-more">Load more profile facts…</button></div>` : ""}
+    ${hasMore ? `<div class="load-more-row"><button class="secondary load-more-btn" id="mem-profile-load-more" data-i18n="ui:Load more profile facts…">Load more profile facts…</button></div>` : ""}
   `;
   els.memoriesProfile.innerHTML = html;
   _updateOvCount("ov-profile-count", total || visibleCount);
@@ -1762,7 +1763,7 @@ export function renderProfileFacts(items, meta = {}) {
   _wireProfileDeleteButtons(els.memoriesProfile);
   document.getElementById("mem-profile-load-more")?.addEventListener("click", function () {
     this.disabled = true;
-    this.textContent = "Loading…";
+    this.textContent = uiText("Loading…");
     sendListProfileFacts({
       offset: visibleCount,
       limit,
@@ -1775,7 +1776,7 @@ export function renderProfileFacts(items, meta = {}) {
 export function renderProfileFactsError(message) {
   if (!els.memoriesProfile) return;
   els.memoriesProfile.innerHTML = `
-    <div class="mem-profile-header">User Profile</div>
+    <div class="mem-profile-header" data-i18n="ui:User Profile">User Profile</div>
     <div class="mem-section-empty error-state">
       Profile facts failed to load.<br>${escHtml(message || "Unknown error")}
     </div>
@@ -1846,7 +1847,7 @@ export function renderReflections(reflections, skillOutcomes) {
   if (!refs.length && !outs.length) {
     el.innerHTML = `
       <div class="mem-ref-hdr">
-        <span class="mem-ref-label">Learning Reflections</span>
+        <span class="mem-ref-label" data-i18n="ui:Learning Reflections">Learning Reflections</span>
       </div>
       <div class="mem-section-empty">No reflections yet.<br>Generated automatically after tasks with 3 or more tool calls.</div>
     `;
@@ -1875,7 +1876,7 @@ export function renderReflections(reflections, skillOutcomes) {
   let _refOffset = Math.min(_REF_PAGE, refs.length);
 
   const outsHtml = outs.length ? `
-    <div class="mem-ref-sub-hdr">Skill Outcomes</div>
+    <div class="mem-ref-sub-hdr" data-i18n="ui:Skill Outcomes">Skill Outcomes</div>
     ${outs.map(o => {
       const score = Math.round((o.quality_score || 0) * 100);
       const scoreClass = score >= 80 ? "mem-sko-good" : score >= 50 ? "mem-sko-mid" : "mem-sko-poor";
@@ -1892,7 +1893,7 @@ export function renderReflections(reflections, skillOutcomes) {
   const hasMore = refs.length > _REF_PAGE;
   el.innerHTML = `
     <div class="mem-ref-hdr">
-      <span class="mem-ref-label">Learning Reflections</span>
+      <span class="mem-ref-label" data-i18n="ui:Learning Reflections">Learning Reflections</span>
       <span class="mem-ref-count">${refs.length}</span>
     </div>
     <div class="mem-ref-list" id="mem-ref-list-body">${renderRefItems(refs.slice(0, _refOffset))}</div>

@@ -32,8 +32,8 @@ setInterval(() => activity.updateActivity({}), 1000);
 
 const process = createProcessDisclosure({ index: "R1/3", label: "3 actions · complete", state: AI_STATES.COMPLETED });
 process.body.innerHTML = `
-  <div class="ui-lab-tool"><span>Search</span><strong>Found 8 relevant sources</strong></div>
-  <div class="ui-lab-tool"><span>Read</span><strong>Compared current implementation</strong></div>
+  <div class="ui-lab-tool"><span data-i18n="ui:Search">Search</span><strong>Found 8 relevant sources</strong></div>
+  <div class="ui-lab-tool"><span data-i18n="ui:Read">Read</span><strong>Compared current implementation</strong></div>
   <div class="ui-lab-tool"><span>Verify</span><strong>All checks passed</strong></div>`;
 document.getElementById("lab-process").appendChild(process.root);
 

@@ -315,7 +315,7 @@ function _buildSkillItem(s) {
   const scopePill  = scopeLabel
     ? `<span class="skill-scope-pill skill-scope-${escHtml(s.scope)}">${scopeLabel}</span>` : "";
   const unavailBadge = available ? ""
-    : `<span class="skill-badge-unavailable" title="${escHtml(s.reason || "Requirements not met")}">⚠ Unavailable</span>`;
+    : `<span class="skill-badge-unavailable" title="${escHtml(s.reason || "Requirements not met")}" data-i18n="ui:⚠ Unavailable">⚠ Unavailable</span>`;
   const unavailReason = (!available && s.reason)
     ? `<div class="skill-reason">${escHtml(s.reason)}</div>` : "";
   const installHints = (!available && s.install_hints && s.install_hints.length)
@@ -335,7 +335,7 @@ function _buildSkillItem(s) {
         ${unavailBadge}
         ${(s.scope === "user") ? `
           <button class="skill-export-single-btn" data-name="${escHtml(s.name)}" title="Export this skill as ZIP">↓</button>
-          <button class="skill-delete-btn" data-name="${escHtml(s.name)}" title="Delete skill">Delete</button>
+          <button class="skill-delete-btn" data-name="${escHtml(s.name)}" title="Delete skill" data-i18n="ui:Delete">Delete</button>
         ` : ""}
       </div>
       ${s.description ? `<div class="skill-item-desc">${escHtml(s.description)}</div>` : ""}
@@ -401,13 +401,13 @@ function _buildSkillCard(s) {
       </div>
       ${tagHtml ? `<div class="skill-card-tags">${tagHtml}</div>` : ""}
       <div class="skill-card-actions">
-        <button class="skill-detail-btn" data-name="${escHtml(s.name)}">Configure</button>
+        <button class="skill-detail-btn" data-name="${escHtml(s.name)}" data-i18n="ui:Configure">Configure</button>
         ${s.editable ? `
           <button class="skill-toggle-btn" data-name="${escHtml(s.name)}" data-enabled="${enabled ? "0" : "1"}">
             ${enabled ? "Disable" : "Enable"}
           </button>` : ""}
-        ${s.deletable ? `<button class="skill-delete-btn" data-name="${escHtml(s.name)}">Delete</button>` : ""}
-        ${s.scope === "user" ? `<button class="skill-export-single-btn" data-name="${escHtml(s.name)}" title="Export this skill as ZIP">Export</button>` : ""}
+        ${s.deletable ? `<button class="skill-delete-btn" data-name="${escHtml(s.name)}" data-i18n="ui:Delete">Delete</button>` : ""}
+        ${s.scope === "user" ? `<button class="skill-export-single-btn" data-name="${escHtml(s.name)}" title="Export this skill as ZIP" data-i18n="ui:Export">Export</button>` : ""}
       </div>
     </article>`;
 }
@@ -423,7 +423,7 @@ function _buildSkillDetailModal() {
     <div class="skill-chain-row ${v.active ? "active" : ""}">
       <span>${escHtml(_scopeLabel(v.tier))}${v.active ? " · active" : ""}</span>
       <code>${escHtml(v.path || "")}</code>
-      ${!v.active && v.can_prune ? `<span class="skill-chain-action ok">Prunable</span>` : ""}
+      ${!v.active && v.can_prune ? `<span class="skill-chain-action ok" data-i18n="ui:Prunable">Prunable</span>` : ""}
       ${!v.active && !v.can_prune && v.prune_reason ? `<span class="skill-chain-action muted">${escHtml(v.prune_reason)}</span>` : ""}
     </div>`).join("");
   const governance = s.governance || {};
@@ -435,29 +435,29 @@ function _buildSkillDetailModal() {
             <div class="skill-modal-kicker">${escHtml(_scopeLabel(s.scope))} Skill</div>
             <h3>${escHtml(s.name)}</h3>
           </div>
-          <button class="skill-modal-close" id="skill-detail-close" title="Close">×</button>
+          <button class="skill-modal-close" id="skill-detail-close" title="Close" data-i18n-title="ui:Close">×</button>
         </div>
         <div class="skill-modal-body">
           <p class="skill-modal-desc">${escHtml(s.description || "No description provided.")}</p>
           <div class="skill-detail-grid">
-            <div><span>Status</span><strong>${s.enabled === false ? "Disabled" : (s.available === false ? "Needs setup" : "Ready")}</strong></div>
-            <div><span>Version</span><strong>${escHtml(s.version || "Unversioned")}</strong></div>
-            <div><span>Editable</span><strong>${s.editable ? "Yes" : "Read only"}</strong></div>
-            <div><span>Path</span><code>${escHtml(s.directory || s.path || "")}</code></div>
+            <div><span data-i18n="ui:Status">Status</span><strong>${s.enabled === false ? "Disabled" : (s.available === false ? "Needs setup" : "Ready")}</strong></div>
+            <div><span data-i18n="ui:Version">Version</span><strong>${escHtml(s.version || "Unversioned")}</strong></div>
+            <div><span data-i18n="ui:Editable">Editable</span><strong>${s.editable ? "Yes" : "Read only"}</strong></div>
+            <div><span data-i18n="ui:Path">Path</span><code>${escHtml(s.directory || s.path || "")}</code></div>
           </div>
-          ${reqs.length ? `<div class="skill-detail-block"><h4>Requirements</h4><div class="skill-card-tags">${reqs.map(r => `<span class="skill-card-tag">${escHtml(r)}</span>`).join("")}</div></div>` : ""}
-          ${chain ? `<div class="skill-detail-block"><h4>Override Chain</h4>${chain}</div>` : ""}
+          ${reqs.length ? `<div class="skill-detail-block"><h4 data-i18n="ui:Requirements">Requirements</h4><div class="skill-card-tags">${reqs.map(r => `<span class="skill-card-tag">${escHtml(r)}</span>`).join("")}</div></div>` : ""}
+          ${chain ? `<div class="skill-detail-block"><h4 data-i18n="ui:Override Chain">Override Chain</h4>${chain}</div>` : ""}
           ${governance.needs_governance ? `
             <div class="skill-detail-block">
-              <h4>Governance</h4>
+              <h4 data-i18n="ui:Governance">Governance</h4>
               <p class="skill-governance-summary">${escHtml(governance.summary || "Multiple definitions detected.")}</p>
               <div class="skill-governance-actions">
-                <button id="skill-prune-overrides" class="secondary" ${governance.can_prune_shadowed ? "" : "disabled"}>Prune Shadowed Copies</button>
+                <button id="skill-prune-overrides" class="secondary" ${governance.can_prune_shadowed ? "" : "disabled"} data-i18n="ui:Prune Shadowed Copies">Prune Shadowed Copies</button>
               </div>
             </div>
           ` : ""}
           <div class="skill-detail-block">
-            <h4>Preview</h4>
+            <h4 data-i18n="ui:Preview">Preview</h4>
             <pre class="skill-preview">${escHtml(s.content_preview || "")}</pre>
           </div>
         </div>
@@ -485,7 +485,7 @@ export function renderSkillsPanel() {
             ${r.strategy_hint ? `<div class="learning-item-meta">${escHtml(r.strategy_hint)}</div>` : ""}
           </div>
         `).join("")
-      : `<div class="skill-notice">No reflections yet.</div>`;
+      : `<div class="skill-notice" data-i18n="ui:No reflections yet.">No reflections yet.</div>`;
     const outcomeHtml = learning.skillOutcomes.length
       ? learning.skillOutcomes.slice(0, 8).map((o) => `
           <div class="learning-outcome-row">
@@ -494,16 +494,16 @@ export function renderSkillsPanel() {
             <span class="learning-outcome-fp">Task Type: ${escHtml(_formatTaskFingerprint(o.task_fingerprint))}</span>
           </div>
         `).join("")
-      : `<div class="skill-notice">No skill outcomes yet.</div>`;
+      : `<div class="skill-notice" data-i18n="ui:No skill outcomes yet.">No skill outcomes yet.</div>`;
     learningSec.innerHTML = `
-      <div class="skills-section-header">Learning Loop</div>
+      <div class="skills-section-header" data-i18n="ui:Learning Loop">Learning Loop</div>
       <div class="learning-grid">
         <div class="learning-col">
-          <div class="learning-col-title">Recent Reflections</div>
+          <div class="learning-col-title" data-i18n="ui:Recent Reflections">Recent Reflections</div>
           ${reflHtml}
         </div>
         <div class="learning-col">
-          <div class="learning-col-title">Skill Outcomes</div>
+          <div class="learning-col-title" data-i18n="ui:Skill Outcomes">Skill Outcomes</div>
           ${outcomeHtml}
         </div>
       </div>`;
@@ -517,8 +517,8 @@ export function renderSkillsPanel() {
   toolbar.className = "skills-toolbar";
   toolbar.innerHTML = `
     ${skills.configured
-      ? `<button class="skills-new-btn" id="btn-new-skill">+ New Skill</button>`
-      : `<span class="skills-toolbar-brand">Skills</span>`}
+      ? `<button class="skills-new-btn" id="btn-new-skill" data-i18n="ui:+ New Skill">+ New Skill</button>`
+      : `<span class="skills-toolbar-brand" data-i18n="ui:Skills">Skills</span>`}
     <div class="skills-toolbar-actions">
       <label class="skills-action-btn" title="Import skills from a ZIP file">
         Import ZIP
@@ -526,8 +526,8 @@ export function renderSkillsPanel() {
       </label>
       <button class="skills-action-btn" id="skill-export-btn"
               title="Export user skills as a shareable ZIP"
-              ${!userSkills.length ? "disabled" : ""}>Export ZIP</button>
-      <button class="skills-action-btn" id="skill-health-btn" title="Check skill requirements and conflicts">Health</button>
+              ${!userSkills.length ? "disabled" : ""} data-i18n="ui:Export ZIP">Export ZIP</button>
+      <button class="skills-action-btn" id="skill-health-btn" title="Check skill requirements and conflicts" data-i18n="ui:Health">Health</button>
     </div>`;
   c.appendChild(toolbar);
 
@@ -538,7 +538,7 @@ export function renderSkillsPanel() {
   library.innerHTML = `
     <div class="skills-library-head">
       <div>
-        <div class="skills-library-title">Skill Library</div>
+        <div class="skills-library-title" data-i18n="ui:Skill Library">Skill Library</div>
         <div class="skills-library-sub">${Number(skills.total || 0)} matched · ${Number(counts.enabled || 0)} enabled · ${Number(counts.conflicts || 0)} conflicts</div>
       </div>
       <div class="skills-library-range">${skills.total ? `${Number(skills.offset || 0) + 1}-${showingTo}` : "0"} / ${Number(skills.total || 0)}</div>
@@ -570,7 +570,7 @@ export function renderSkillsPanel() {
     </div>
     ${skills.installed.length
       ? `<div class="skills-card-grid">${skills.installed.map(_buildSkillCard).join("")}</div>`
-      : `<div class="skill-notice"><strong>No skills found.</strong><br>Try a different search or create/import a skill.</div>`}
+      : `<div class="skill-notice"><strong data-i18n="ui:No skills found.">No skills found.</strong><br>Try a different search or create/import a skill.</div>`}
     <div class="skills-pager">
       <button id="skills-prev-page" ${Number(skills.offset || 0) <= 0 ? "disabled" : ""}>Previous</button>
       <button id="skills-next-page" ${(Number(skills.offset || 0) + Number(skills.limit || 80)) >= Number(skills.total || 0) ? "disabled" : ""}>Next</button>
@@ -593,8 +593,8 @@ export function renderSkillsPanel() {
         <textarea id="skill-create-content" class="skills-create-textarea" rows="7"
                   placeholder="Skill instructions…"></textarea>
         <div class="skills-create-footer">
-          <button id="btn-skill-save">Save Skill</button>
-          <button id="btn-skill-cancel" class="secondary">Cancel</button>
+          <button id="btn-skill-save" data-i18n="ui:Save Skill">Save Skill</button>
+          <button id="btn-skill-cancel" class="secondary" data-i18n="ui:Cancel">Cancel</button>
           <span id="skill-save-status" class="skills-create-status"></span>
         </div>
       </div>`;
@@ -609,7 +609,7 @@ export function renderSkillsPanel() {
   const sec2 = document.createElement("div");
   sec2.className = "skills-section skill-git-section";
   sec2.innerHTML = `
-    <div class="skills-section-header">Add External Skill</div>
+    <div class="skills-section-header" data-i18n="ui:Add External Skill">Add External Skill</div>
     <p class="skill-git-hint">
       Paste a Git, GitHub tree, ZIP, or compatible Claude-style marketplace repository URL.
       We inspect it first, then install the selected skill.
@@ -656,10 +656,10 @@ export function renderSkillsPanel() {
           </div>
           <div class="skill-source-install-row">
             <select id="skill-install-scope">
-              <option value="user" ${skills.installScope === "user" ? "selected" : ""}>User Global</option>
-              <option value="workspace" ${skills.installScope === "workspace" ? "selected" : ""}>Workspace</option>
+              <option value="user" ${skills.installScope === "user" ? "selected" : ""} data-i18n="ui:User Global">User Global</option>
+              <option value="workspace" ${skills.installScope === "workspace" ? "selected" : ""} data-i18n="ui:Workspace">Workspace</option>
             </select>
-            <button id="btn-install-inspected-skill" class="primary" ${!inspect.ok ? "disabled" : ""}>Install</button>
+            <button id="btn-install-inspected-skill" class="primary" ${!inspect.ok ? "disabled" : ""} data-i18n="ui:Install">Install</button>
           </div>
         ` : ""}
       </div>

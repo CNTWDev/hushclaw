@@ -1,3 +1,4 @@
+import { uiText } from "./i18n.js";
 /** Shared-modal itinerary detail/edit interactions. External events never mutate. */
 import { send, els, getCurrentSessionId, setComposerDraft, state, showToast } from './state.js';
 import { openDialog, openConfirm } from './modal.js';
@@ -13,7 +14,7 @@ const readonly = e => e.source && e.source !== 'local';
 let editor = null;
 let editorError = null;
 export function onCalendarError(reply) {
-  if (editorError) editorError(reply.message);else showToast(reply.message || '行程操作失败');
+  if (editorError) editorError(reply.message);else showToast(reply.message || uiText("Event operation failed"));
 }
 export function closeEventEditor() {
   editor?.();
@@ -22,28 +23,28 @@ export function closeEventEditor() {
 export function eventDetails(e, date, zone) {
   let close;
   const actions = [{
-    label: '完成',
+    label: uiText("Done"),
     secondary: true,
     onClick: () => close()
   }];
   if (!readonly(e)) {
     actions.push({
-      label: '编辑',
+      label: uiText("Edit"),
       onClick: () => {
         close();
         eventEditor(e, date, zone);
       }
     });
     actions.push({
-      label: '删除',
+      label: uiText("Delete"),
       danger: true,
       onClick: async () => {
         close();
         if (await openConfirm({
-          title: '删除行程',
+          title: uiText("Delete event"),
           message: `确认删除「${e.title}」？此操作无法撤销。`,
-          confirmText: '删除',
-          cancelText: '取消',
+          confirmText: uiText("Delete"),
+          cancelText: uiText("Cancel"),
           dangerConfirm: true
         })) send({
           type: 'delete_calendar_event',
@@ -53,14 +54,14 @@ export function eventDetails(e, date, zone) {
     });
   }
   actions.push({
-    label: '准备这场行程',
+    label: uiText("Prepare for this event"),
     onClick: async () => {
       close();
       const {
         switchTab
       } = await import('./panels.js');
       switchTab('chat');
-      const draft = `请帮我准备这场行程：${e.title}\n时间：${e.start_time} 至 ${e.end_time}\n地点：${e.location || '未设置'}\n请先明确目标、待确认的问题及准备材料；不要自动修改日历、发送消息或邀请参会人。`;
+      const draft = `请帮我准备这场行程：${e.title}\n时间：${e.start_time} 至 ${e.end_time}\n地点：${e.location || uiText("Not set")}\n请先明确目标、待确认的问题及准备材料；不要自动修改日历、发送消息或邀请参会人。`;
       els.input.value = [els.input.value.trim(), draft].filter(Boolean).join('\n\n');
       setComposerDraft(getCurrentSessionId(), els.input.value);
       els.input.dispatchEvent(new Event('input', {
@@ -71,14 +72,14 @@ export function eventDetails(e, date, zone) {
   });
   const meeting = (e.location || '').match(/https:\/\/[^\s<>"']+/)?.[0],
     label = {
-      macos: '本机日历',
+      macos: uiText("On device"),
       google: 'Google',
       caldav: 'CalDAV'
     }[e.source] || 'HushClaw';
   close = openDialog({
     title: e.title,
     cardClass: 'it-detail-dialog',
-    html: `<div class="it-detail"><p>${esc(e.all_day ? e.start_time + ' 至 ' + e.end_time + '（结束日期不含当天）' : wallInput(e.start_time, zone).replace('T', ' ') + ' — ' + wallInput(e.end_time, zone).replace('T', ' '))}</p><p>${esc(zone)}</p><p>${esc(e.location || '未设置地点')}</p><p>${esc(label)}${e.source === 'macos' ? ' · ' + esc(e.remote_etag || '') : ''} · ${readonly(e) ? '只读；请回原日历修改' : '本地行程，可编辑'}</p>${meeting ? `<a href="${esc(meeting)}" target="_blank" rel="noopener noreferrer">打开会议链接 ↗</a>` : ''}<p class="it-description">${esc(e.description || '')}</p><p class="it-muted">准备行程只填入对话草稿，由你确认发送。</p></div>`,
+    html: `<div class="it-detail"><p>${esc(e.all_day ? e.start_time + ' — ' + e.end_time + ' (' + uiText('End date is exclusive') + ')' : wallInput(e.start_time, zone).replace('T', ' ') + ' — ' + wallInput(e.end_time, zone).replace('T', ' '))}</p><p>${esc(zone)}</p><p>${esc(e.location || uiText("No location"))}</p><p>${esc(label)}${e.source === 'macos' ? ' · ' + esc(e.remote_etag || '') : ''} · ${readonly(e) ? uiText("Read-only; edit in the original calendar") : uiText("Editable local event")}</p>${meeting ? `<a href="${esc(meeting)}" target="_blank" rel="noopener noreferrer" data-i18n="ui:Open meeting link ↗">打开会议链接 ↗</a>` : ''}<p class="it-description">${esc(e.description || '')}</p><p class="it-muted" data-i18n="ui:Preparing an event only fills a chat draft; you choose whether to send it.">准备行程只填入对话草稿，由你确认发送。</p></div>`,
     actions
   });
 }
@@ -90,15 +91,15 @@ export function eventEditor(e, date, zone, initial = '') {
     busy = false;
   const field = (name, label, value, type = 'text') => `<label>${label}<input name="${name}" type="${type}" value="${esc(value)}" ${name === 'title' ? 'maxlength="500" required' : ''}></label>`;
   close = openDialog({
-    title: e ? '编辑行程' : '新建行程',
+    title: e ? uiText("Edit event") : uiText("New event"),
     cardClass: 'it-edit-dialog',
-    html: `<form id="it-event-form"><p class="it-muted">保存在 HushClaw · ${esc(zone)}</p>${field('title', '行程名称', e?.title || '')}<label class="it-check"><input name="all_day" type="checkbox" ${e?.all_day ? 'checked' : ''}>全天</label><div class="it-form-times">${field('start', '开始', start, 'datetime-local')}${field('end', '结束', end, 'datetime-local')}</div>${field('location', '地点或会议链接', e?.location || '')}<label>备注<textarea name="description" rows="3" maxlength="5000">${esc(e?.description || '')}</textarea></label><p id="it-form-error" role="alert"></p></form>`,
+    html: `<form id="it-event-form"><p class="it-muted">${uiText("Saved in HushClaw")} · ${esc(zone)}</p>${field('title', uiText("Event title"), e?.title || '')}<label class="it-check"><input name="all_day" type="checkbox" ${e?.all_day ? 'checked' : ''}><span data-i18n="ui:All day">${uiText("All day")}</span></label><div class="it-form-times">${field('start', uiText("Start"), start, 'datetime-local')}${field('end', uiText("End"), end, 'datetime-local')}</div>${field('location', uiText("Location or meeting link"), e?.location || '')}<label><span data-i18n="ui:Notes">${uiText("Notes")}</span><textarea name="description" rows="3" maxlength="5000">${esc(e?.description || '')}</textarea></label><p id="it-form-error" role="alert"></p></form>`,
     actions: [{
-      label: '取消',
+      label: uiText("Cancel"),
       secondary: true,
       onClick: () => close()
     }, {
-      label: '保存',
+      label: uiText("💾 Save"),
       onClick: save
     }],
     onOpen: () => {
@@ -135,13 +136,13 @@ export function eventEditor(e, date, zone, initial = '') {
     const form = document.getElementById('it-event-form');
     if (busy || !form?.reportValidity()) return;
     try {
-      if (state.ws?.readyState !== 1) throw Error('连接已断开，请重连后保存。');
+      if (state.ws?.readyState !== 1) throw Error(uiText("Disconnected. Reconnect before saving."));
       const get = n => form.elements[n].value,
         all = form.elements.all_day.checked;
       const a = all ? get('start') : wallToISO(get('start'), zone),
         b = all ? get('end') : wallToISO(get('end'), zone);
-      if (!a || !b || Date.parse(b) <= Date.parse(a)) throw Error('结束时间必须晚于开始时间；全天行程的结束日期不包含当天。');
-      if (!get('title').trim()) throw Error('请输入行程名称。');
+      if (!a || !b || Date.parse(b) <= Date.parse(a)) throw Error(uiText("End must follow start. All-day end dates are exclusive."));
+      if (!get('title').trim()) throw Error(uiText("Enter an event title."));
       busy = true;
       send({
         type: e ? 'update_calendar_event' : 'create_calendar_event',
@@ -156,11 +157,12 @@ export function eventEditor(e, date, zone, initial = '') {
         description: get('description').trim(),
         color: e?.color || 'indigo'
       });
-      document.getElementById('it-form-error').textContent = '正在保存…';
+      const savingText = uiText("Saving\u2026");
+      document.getElementById('it-form-error').textContent = savingText;
       setTimeout(() => {
         busy = false;
         const error = document.getElementById('it-form-error');
-        if (error?.textContent === '正在保存…') error.textContent = '尚未收到保存确认，请关闭后刷新行程，核对是否已保存。';
+        if (error?.textContent === savingText) error.textContent = uiText("Save unconfirmed. Close and refresh the calendar to check whether it was saved.");
       }, 15000);
     } catch (error) {
       document.getElementById('it-form-error').textContent = error.message;

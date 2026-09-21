@@ -398,7 +398,7 @@ function _openTagFilterDialog() {
           <span>${escHtml(name)}</span><small>${Number(item.count || 0)}</small>
         </label>`;
       }).join("")
-    : '<div class="file-tag-filter-empty">还没有可筛选的标签</div>';
+    : '<div class="file-tag-filter-empty" data-i18n="ui:No tags to filter yet">还没有可筛选的标签</div>';
   openDialog({
     title: "筛选文件标签",
     cardClass: "app-modal-card--file-tags",
@@ -429,15 +429,15 @@ function _openFileTagEditor(item) {
     title: `编辑标签 · ${item.name || "文件"}`,
     cardClass: "app-modal-card--file-tags",
     html: `<div class="file-tag-editor">
-      <label for="file-manual-tags-input">手动标签</label>
+      <label for="file-manual-tags-input" data-i18n="ui:Manual tags">手动标签</label>
       <textarea id="file-manual-tags-input" rows="3" maxlength="400"
         placeholder="用逗号分隔，例如：战略，传音，核心资料">${escHtml(manual.join("，"))}</textarea>
-      <div class="file-tag-editor-hint">最多 12 个标签；手动标签不会被自动标签覆盖。</div>
+      <div class="file-tag-editor-hint" data-i18n="ui:Up to 12 tags. Manual tags are not overwritten by automatic tags.">最多 12 个标签；手动标签不会被自动标签覆盖。</div>
       <div class="file-tag-editor-auto">
-        <span>自动标签</span>
+        <span data-i18n="ui:Automatic tags">自动标签</span>
         ${automatic.length
           ? automatic.map(tag => `<span class="file-tag-chip file-tag-chip--auto">${escHtml(tag)}</span>`).join("")
-          : '<small>暂无</small>'}
+          : '<small data-i18n="ui:No data">暂无</small>'}
       </div>
     </div>`,
     actions: [
@@ -470,8 +470,8 @@ function _renderFileFilters(list) {
     <button id="files-tag-filter" class="files-filter-btn${_tagFilters.length ? " files-filter-btn--active" : ""}"
       type="button" title="按标签筛选"># 标签${_tagFilters.length ? ` · ${_tagFilters.length}` : ""}</button>
     <select id="files-sort" class="files-sort" aria-label="文件排序">
-      <option value="recent"${_sortMode === "recent" ? " selected" : ""}>最近更新</option>
-      <option value="rating"${_sortMode === "rating" ? " selected" : ""}>重要程度</option>
+      <option value="recent"${_sortMode === "recent" ? " selected" : ""} data-i18n="ui:Recently updated">最近更新</option>
+      <option value="rating"${_sortMode === "rating" ? " selected" : ""} data-i18n="ui:Importance">重要程度</option>
     </select>
     ${_tagFilters.length ? `<div class="files-active-tags">${_tagFilters.map(tag =>
       `<button type="button" class="files-active-tag" data-tag="${escHtml(tag)}" title="移除筛选">${escHtml(tag)} ×</button>`
@@ -527,7 +527,7 @@ export function renderFiles(data) {
   tabBar.innerHTML = tabs.map(t =>
     `<button class="files-tab${_sourceFilter === t.key ? " files-tab--active" : ""}" data-source="${t.key}">${t.label}</button>`
   ).join("") + `<button id="files-mark-all-read" class="files-mark-all-read${_unseenGeneratedFiles.size ? "" : " hidden"}"
-    type="button" title="Mark every generated file as read" aria-label="Mark all generated files as read">全部已读</button>`;
+    type="button" title="Mark every generated file as read" aria-label="Mark all generated files as read" data-i18n="ui:Mark all read">全部已读</button>`;
   tabBar.querySelectorAll(".files-tab").forEach(btn => {
     btn.addEventListener("click", () => {
       _sourceFilter = btn.dataset.source;
@@ -553,7 +553,7 @@ export function renderFiles(data) {
         placeholder="Search files" aria-label="Search files">
       <span id="files-search-state" class="files-search-state"></span>
       <button id="files-search-clear" class="files-search-clear" title="Clear search"
-        aria-label="Clear search">Clear</button>
+        aria-label="Clear search" data-i18n="ui:Clear" data-i18n-title="ui:Clear search" data-i18n-aria="ui:Clear search">Clear</button>
     `;
     list.parentElement?.insertBefore(searchBar, list);
     const createdInput = searchBar.querySelector("#files-search-input");
@@ -608,7 +608,7 @@ export function renderFiles(data) {
   if (!items.length && _offset === 0) {
     list.innerHTML = _query
       ? `<div class="files-empty">No files match "${escHtml(_query)}"</div>`
-      : '<div class="files-empty">Drop a .md file here to add it to the knowledge base</div>';
+      : '<div class="files-empty" data-i18n="ui:Drop a .md file here to add it to the knowledge base">Drop a .md file here to add it to the knowledge base</div>';
     if (pag) pag.innerHTML = "";
     return;
   }
@@ -625,9 +625,9 @@ export function renderFiles(data) {
     const updatedTitle = _fmtAbsTime(item.modified || item.updated || item.created);
     const ext = _extLabel(item.name);
     const badge = item.source === "generated"
-      ? `<span class="file-badge file-badge--gen" title="AI 生成">生成</span>`
+      ? `<span class="file-badge file-badge--gen" title="AI 生成" data-i18n="ui:Generation">生成</span>`
       : item.indexed
-        ? `<span class="file-badge file-badge--indexed" title="已加入知识库">知识库</span>`
+        ? `<span class="file-badge file-badge--indexed" title="已加入知识库" data-i18n="ui:Knowledge Base">知识库</span>`
         : "";
     const previewType = isMarkdown ? "md" : isHtml ? "html" : isPdf ? "pdf" : isImage ? "image" : "";
     const isUnseen = _unseenGeneratedFiles.has(_artifactKey(item));
@@ -754,9 +754,9 @@ export function renderFiles(data) {
         : "";
     } else {
       pag.innerHTML = `
-        <button class="files-pag-btn" id="files-pag-prev" ${hasPrev ? "" : "disabled"}>‹ Prev</button>
+        <button class="files-pag-btn" id="files-pag-prev" ${hasPrev ? "" : "disabled"} data-i18n="ui:‹ Prev">‹ Prev</button>
         <span class="files-count">${_offset + 1}–${Math.min(_offset + _LIMIT, _total)} of ${_total}</span>
-        <button class="files-pag-btn" id="files-pag-next" ${hasNext ? "" : "disabled"}>Next ›</button>
+        <button class="files-pag-btn" id="files-pag-next" ${hasNext ? "" : "disabled"} data-i18n="ui:Next ›">Next ›</button>
       `;
       document.getElementById("files-pag-prev")?.addEventListener("click", () => (
         _cursorStack.length ? _loadPrevPage() : _loadPage(_offset - _LIMIT)

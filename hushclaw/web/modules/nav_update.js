@@ -1,3 +1,4 @@
+import { uiText } from "./i18n.js";
 /**
  * nav_update.js — Left rail update / force-upgrade entry.
  */
@@ -42,12 +43,13 @@ export function refreshNavUpdateAction() {
 
   btn.disabled = Boolean(view.disabled);
   btn.dataset.force = view.force ? "1" : "0";
-  btn.dataset.label = view.force ? "Force Upgrade" : view.label;
-  btn.title = view.force ? "Dev mode: force upgrade HushClaw" : "Upgrade HushClaw";
+  btn.dataset.label = uiText(view.force ? "Force Upgrade" : view.label);
+  btn.title = uiText(view.force ? "Dev mode: force upgrade HushClaw" : "Upgrade HushClaw");
+  btn.dataset.i18nTitle = `ui:${view.force ? "Dev mode: force upgrade HushClaw" : "Upgrade HushClaw"}`;
   btn.classList.toggle("has-update", Boolean(view.badge));
   btn.classList.toggle("is-force", Boolean(view.force));
   btn.classList.toggle("is-busy", Boolean(view.disabled));
-  if (label) label.textContent = view.label;
+  if (label) { label.dataset.i18n = `ui:${view.label}`; label.textContent = uiText(view.label); }
   if (badge) badge.classList.toggle("hidden", !view.badge);
 }
 
@@ -62,7 +64,7 @@ export function initNavUpdateAction() {
       return;
     }
     if (!wizard.updateAvailable) {
-      showToast("No update is currently available.", "info");
+      showToast(uiText("No update is currently available."), "info");
       refreshNavUpdateAction();
       return;
     }
@@ -70,3 +72,5 @@ export function initNavUpdateAction() {
   });
   refreshNavUpdateAction();
 }
+
+document.addEventListener("locale-changed", refreshNavUpdateAction);

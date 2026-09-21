@@ -1,3 +1,5 @@
+import { setLocale } from "../hushclaw/web/modules/i18n.js";
+setLocale("zh");
 // Run: node --test tests/test_thinking_progress.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';

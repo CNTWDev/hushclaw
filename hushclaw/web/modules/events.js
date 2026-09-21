@@ -23,7 +23,7 @@ import {
 } from "./panels.js";
 import { connect } from "./websocket.js";
 import { initTheme } from "./theme.js";
-import { initLocale, setLocale, currentLocale } from "./i18n.js";
+import { initLocale } from "./i18n.js";
 import { openConfirm } from "./modal.js";
 import { refreshChatStats } from "./stats.js";
 import { initNavUpdateAction } from "./nav_update.js";
@@ -452,10 +452,6 @@ initLocale();
 initTabLabels();
 refreshChatStats();
 initNavUpdateAction();
-document.getElementById("lang-toggle")?.addEventListener("click", () => {
-  setLocale(currentLocale === "en" ? "zh" : "en");
-  initTabLabels();
-});
 initSessionsSidebarState();
 initFilesSidebar();
 initLogsPanel();

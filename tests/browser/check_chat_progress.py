@@ -65,6 +65,7 @@ def main():
                   const {state, setCurrentSessionId} = await import('/modules/state.js');
                   window.chat = await import('/modules/chat.js');
                   window.primitives = await import('/modules/ui/ai-primitives.js');
+                  (await import('/modules/i18n.js')).setLocale('zh');
                   const {handleMessage} = await import('/modules/websocket.js');
                   window.state = state;
                   state.ws = {readyState:1,send:() => {}};

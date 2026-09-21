@@ -30,7 +30,7 @@ export function renderLogs(items = []) {
   const { list } = _controls();
   if (!list) return;
   if (!items.length) {
-    list.innerHTML = '<div class="logs-empty">No matching logs in this server process.</div>';
+    list.innerHTML = '<div class="logs-empty" data-i18n="ui:No matching logs in this server process.">No matching logs in this server process.</div>';
     return;
   }
   list.innerHTML = items.map((item) => {

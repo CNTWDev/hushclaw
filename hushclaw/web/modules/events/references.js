@@ -37,7 +37,7 @@ export function renderReferenceChips() {
     const text = `${role}${ref.preview || ref.message_id || "message"}`.slice(0, 96);
     return `
       <span class="reference-chip" title="${escHtml(ref.message_id || "")}">
-        <span class="reference-chip-label">引用</span>
+        <span class="reference-chip-label" data-i18n="ui:Reference">引用</span>
         <span class="reference-chip-text">${escHtml(text)}</span>
         <button type="button" class="reference-chip-remove" data-idx="${idx}" title="Remove reference">×</button>
       </span>

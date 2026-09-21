@@ -4,6 +4,8 @@
  * Default: follows system locale (zh* → Chinese, everything else → English).
  */
 
+import { UI_MESSAGES } from "./i18n-catalog.js";
+
 export const LOCALES = ["en", "zh"];
 export const LOCALE_STORAGE_KEY = "hushclaw.ui.locale";
 
@@ -28,7 +30,7 @@ const LANGS = {
     desc_tasks:    "Todos and scheduled recurring tasks",
     desc_calendar: "Calendar — create, view and manage events",
     desc_logs:     "View recent server logs",
-    desc_settings: "Configure AI provider, model, and system settings",
+    desc_settings: "Manage your account, models and preferences",
     // Sidebar
     sessions:        "Threads",
     files:           "Files",
@@ -130,7 +132,7 @@ const LANGS = {
     smem_init_btn:               "🗂 Initialize Workspace (create SOUL.md & USER.md)",
     smem_reseed_btn:             "🔄 Re-seed missing files",
     smem_autoextract_label:      "Enable auto-extraction",
-    smem_autoextract_desc:       "Regex-based fact extraction after each turn (zero extra LLM calls)",
+    smem_autoextract_desc:       "Extract personal context after conversations using the configured background model",
     // Settings — Integrations tab
     sint_quickfill:    "Quick-fill provider",
     sint_acct_label:   "Account Label",
@@ -179,7 +181,7 @@ const LANGS = {
     desc_tasks:    "待办事项与定时任务",
     desc_calendar: "日历 — 创建、查看和管理事件",
     desc_logs:     "查看最近的服务端日志",
-    desc_settings: "配置 AI 提供商、模型和系统设置",
+    desc_settings: "管理账号、模型与偏好设置",
     sessions:        "对话",
     files:           "文件",
     search_sessions: "搜索会话…",
@@ -273,7 +275,7 @@ const LANGS = {
     smem_init_btn:               "🗂 初始化工作区（创建 SOUL.md 和 USER.md）",
     smem_reseed_btn:             "🔄 补充缺失文件",
     smem_autoextract_label:      "启用自动提取",
-    smem_autoextract_desc:       "每轮对话后正则提取事实（无需额外 LLM 调用）",
+    smem_autoextract_desc:       "对话后使用配置的后台模型提取个人上下文",
     // Settings — Integrations tab
     sint_quickfill:    "快速填充提供商",
     sint_acct_label:   "账户标签",
@@ -309,42 +311,63 @@ function _detect() {
     const saved = localStorage.getItem(LOCALE_STORAGE_KEY);
     if (LOCALES.includes(saved)) return saved;
   } catch { /* ignore */ }
-  return (navigator.language || "en").toLowerCase().startsWith("zh") ? "zh" : "en";
+  return (globalThis.navigator?.language || "en").toLowerCase().startsWith("zh") ? "zh" : "en";
 }
 
 export let currentLocale = _detect();
 
 /** Translate a key for the current locale, falling back to English then the key itself. */
-export function t(key) {
-  return (LANGS[currentLocale]?.[key] ?? LANGS.en[key]) ?? key;
+export function t(key, params = {}) {
+  const value = key.startsWith("ui:")
+    ? UI_MESSAGES[key.slice(3)]?.[currentLocale] ?? key.slice(3)
+    : (LANGS[currentLocale]?.[key] ?? LANGS.en[key]) ?? key;
+  return typeof value === "string"
+    ? value.replace(/\{(\w+)\}/g, (match, name) => params[name] ?? match)
+    : value;
 }
+
+/** Translate an explicitly authored UI string, never message/model/user data. */
+export function uiText(text, params) { return text == null ? "" : t(`ui:${text}`, params); }
+export function localeTag() { return currentLocale === "zh" ? "zh-CN" : "en-US"; }
 
 /** Switch locale, persist to localStorage, apply to DOM, dispatch "locale-changed". */
 export function setLocale(lang) {
   if (!LOCALES.includes(lang)) lang = "en";
   currentLocale = lang;
   try { localStorage.setItem(LOCALE_STORAGE_KEY, lang); } catch { /* ignore */ }
+  if (typeof document === "undefined") return;
   document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
   applyLocale();
   document.dispatchEvent(new CustomEvent("locale-changed", { detail: { locale: lang } }));
 }
 
 /** Apply current locale to all annotated DOM elements (idempotent). */
-export function applyLocale() {
+export function applyLocale(root = document) {
+  const find = selector => [
+    ...(root.matches?.(selector) ? [root] : []),
+    ...root.querySelectorAll(selector),
+  ];
   // Static text nodes
-  document.querySelectorAll("[data-i18n]").forEach(el => {
+  find("[data-i18n]").forEach(el => {
     const v = t(el.dataset.i18n);
-    if (v !== undefined) el.textContent = v;
+    if (v !== undefined && el.textContent !== v) el.textContent = v;
   });
   // Placeholder attributes
-  document.querySelectorAll("[data-i18n-ph]").forEach(el => {
+  find("[data-i18n-ph]").forEach(el => {
     const v = t(el.dataset.i18nPh);
     if (v !== undefined) el.placeholder = v;
   });
   // data-desc + title attributes on tab buttons
-  document.querySelectorAll("[data-i18n-desc]").forEach(el => {
+  find("[data-i18n-desc]").forEach(el => {
     const v = t(el.dataset.i18nDesc);
     if (v !== undefined) { el.dataset.desc = v; el.title = v; }
+  });
+  for (const [annotation, attribute] of [["data-i18n-title", "title"], ["data-i18n-aria", "aria-label"]]) {
+    find(`[${annotation}]`).forEach(el => el.setAttribute(attribute, t(el.getAttribute(annotation))));
+  }
+  if (root !== document) return;
+  document.querySelectorAll('.tab[data-tab]').forEach(tab => {
+    tab.dataset.label = tab.querySelector('[data-i18n]')?.textContent || tab.dataset.tab;
   });
   const messages = document.getElementById("messages");
   if (messages) messages.dataset.emptyTitle = t("empty_title");
@@ -354,13 +377,37 @@ export function applyLocale() {
   if (Array.isArray(days)) {
     wkdays.forEach((el, i) => { if (days[i] !== undefined) el.textContent = days[i]; });
   }
-  // Toggle button label: show the OTHER language (the one you'd switch to)
+  // Preserve the icon and show the current language; tooltip explains the action.
   const btn = document.getElementById("lang-toggle");
-  if (btn) btn.textContent = currentLocale === "zh" ? "EN" : "中";
+  if (btn) {
+    const label = btn.querySelector(".rail-locale-value");
+    if (label) label.textContent = currentLocale === "zh" ? "中文" : "EN";
+    btn.title = uiText(currentLocale === "zh" ? "Switch to English" : "Switch to Chinese");
+    btn.setAttribute("aria-label", btn.title);
+  }
 }
+
+let localeObserver;
 
 /** Detect locale and apply on page load. */
 export function initLocale() {
   document.documentElement.lang = currentLocale === "zh" ? "zh-CN" : "en";
   applyLocale();
+  const toggle = document.getElementById("lang-toggle");
+  if (toggle && !toggle.dataset.localeBound) {
+    toggle.dataset.localeBound = "1";
+    toggle.addEventListener("click", () => setLocale(currentLocale === "en" ? "zh" : "en"));
+  }
+  // Only annotated product copy is observed. Never walk/replace arbitrary text:
+  // messages, filenames, inputs, model IDs and third-party content stay intact.
+  if (!localeObserver && typeof MutationObserver !== "undefined") {
+    localeObserver = new MutationObserver(records => {
+      const roots = new Set();
+      for (const record of records) {
+        for (const node of record.addedNodes) if (node.nodeType === 1) roots.add(node);
+      }
+      for (const node of roots) if (node.isConnected) applyLocale(node);
+    });
+    localeObserver.observe(document.body, { childList: true, subtree: true });
+  }
 }

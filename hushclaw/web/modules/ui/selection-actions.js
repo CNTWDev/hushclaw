@@ -13,10 +13,10 @@ export function initSelectionActions({ messages, input } = {}) {
   toolbar.setAttribute("role", "toolbar");
   toolbar.setAttribute("aria-label", "Actions for selected assistant text");
   toolbar.innerHTML = `
-    <span class="ai-selection-actions-label">Ask Pip</span>
-    <button type="button" data-selection-action="explain">Explain</button>
-    <button type="button" data-selection-action="improve">Improve</button>
-    <button type="button" data-selection-action="shorten">Shorten</button>`;
+    <span class="ai-selection-actions-label" data-i18n="ui:Ask Pip">Ask Pip</span>
+    <button type="button" data-selection-action="explain" data-i18n="ui:Explain">Explain</button>
+    <button type="button" data-selection-action="improve" data-i18n="ui:Improve">Improve</button>
+    <button type="button" data-selection-action="shorten" data-i18n="ui:Shorten">Shorten</button>`;
   document.body.appendChild(toolbar);
 
   let selectedText = "";

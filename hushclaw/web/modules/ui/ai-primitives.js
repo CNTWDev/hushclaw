@@ -1,3 +1,4 @@
+import { uiText } from "../i18n.js";
 /**
  * ai-primitives.js — the small, shared interaction contract for AI work.
  *
@@ -45,14 +46,14 @@ let _processDisclosureId = 0;
 // Public progress describes work, never raw arguments/results or model thoughts.
 export function toolActivityLabel(tool = "") {
   const name = String(tool).toLowerCase();
-  if (/skill/.test(name)) return "正在执行技能…";
-  if (/search|browse|fetch|research/.test(name)) return "正在查找资料…";
-  if (/recall|memory|remember/.test(name)) return "正在查阅记忆…";
-  if (/read|list_dir|inspect/.test(name)) return "正在阅读文件…";
-  if (/write|edit|patch|artifact|export/.test(name)) return "正在生成或更新文件…";
-  if (/agent|delegate/.test(name)) return "正在协调任务…";
-  if (/shell|exec|python|code/.test(name)) return "正在运行和检查…";
-  return "正在执行操作…";
+  if (/skill/.test(name)) return uiText("Running a skill…");
+  if (/search|browse|fetch|research/.test(name)) return uiText("Looking up information…");
+  if (/recall|memory|remember/.test(name)) return uiText("Recalling memories…");
+  if (/read|list_dir|inspect/.test(name)) return uiText("Reading files…");
+  if (/write|edit|patch|artifact|export/.test(name)) return uiText("Generating or updating files…");
+  if (/agent|delegate/.test(name)) return uiText("Coordinating tasks…");
+  if (/shell|exec|python|code/.test(name)) return uiText("Running and checking…");
+  return uiText("Performing an action…");
 }
 
 export function runtimeActivityLabel(runtime = {}) {
@@ -60,25 +61,25 @@ export function runtimeActivityLabel(runtime = {}) {
   if (runtime.phase === "tool_call" || runtime.phase === "tooling") {
     return toolActivityLabel(step.meta?.tool || runtime.active_tool || runtime.tool || "");
   }
-  if (runtime.phase === "queued" || runtime.status === "queued") return "等待开始…";
-  if (runtime.phase === "recall") return "正在查阅记忆…";
-  if (runtime.phase === "preparing") return "正在准备会话上下文…";
-  if (runtime.phase === "compacting") return "正在整理上下文…";
-  if (runtime.phase === "waiting_model") return "正在等待模型回复…";
-  if (runtime.phase === "retrying_model") return "正在重试模型请求…";
-  if (runtime.phase === "streaming") return "正在组织回复…";
+  if (runtime.phase === "queued" || runtime.status === "queued") return uiText("Waiting to start…");
+  if (runtime.phase === "recall") return uiText("Recalling memories…");
+  if (runtime.phase === "preparing") return uiText("Preparing context…");
+  if (runtime.phase === "compacting") return uiText("Organizing context…");
+  if (runtime.phase === "waiting_model") return uiText("Waiting for the model…");
+  if (runtime.phase === "retrying_model") return uiText("Retrying model request…");
+  if (runtime.phase === "streaming") return uiText("Composing reply…");
   const round = Number(step.meta?.round || 0);
-  if (round > 0) return `正在分析 · 第 ${round} 轮`;
-  return "正在等待执行进度…";
+  if (round > 0) return uiText("Analyzing · round {n}", {n:round});
+  return uiText("Waiting for progress…");
 }
 
 export function thinkingActivityDetail(detail, phase, startedAt, now = Date.now()) {
   // A truthful slow-operation hint, not a timer-driven fictional work ticker.
   const elapsed = Math.max(0, now - Number(startedAt || now));
   if (elapsed >= 30_000 && ["preparing", "compacting", "waiting_model", "retrying_model"].includes(phase)) {
-    return `${String(detail).replace(/…$/, "")} · 耗时较长`;
+    return `${String(uiText(detail)).replace(/…$/, "")} · ${uiText("Taking longer than usual")}`;
   }
-  return detail;
+  return uiText(detail);
 }
 
 export function normalizeAiState(value, fallback = AI_STATES.IDLE) {

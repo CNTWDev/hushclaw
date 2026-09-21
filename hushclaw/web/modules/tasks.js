@@ -33,7 +33,7 @@ export function renderTodos(items, hasMore = false, offset = 0) {
   if (!el) return;
   el.querySelector(".load-more-row")?.remove();
   if (!tasksState.todos.length) {
-    el.innerHTML = '<div class="tasks-empty">No todos yet.</div>';
+    el.innerHTML = '<div class="tasks-empty" data-i18n="ui:No todos yet.">No todos yet.</div>';
     return;
   }
   el.innerHTML = "";
@@ -145,8 +145,8 @@ export function renderWorkTasks(items, reliability = null) {
   if (!el) return;
   if (!items.length) {
     el.innerHTML = tasksState.workStatus
-      ? `<div class="tasks-empty"><strong>No ${escHtml(tasksState.workStatus)} work tasks</strong><span>Change the filter or create a new task.</span></div>`
-      : '<div class="tasks-empty"><strong>No work tasks yet</strong><span>Create one when you want HushClaw to track a background run.</span></div>';
+      ? `<div class="tasks-empty"><strong>No ${escHtml(tasksState.workStatus)} work tasks</strong><span data-i18n="ui:Change the filter or create a new task.">Change the filter or create a new task.</span></div>`
+      : '<div class="tasks-empty"><strong data-i18n="ui:No work tasks yet">No work tasks yet</strong><span data-i18n="ui:Create one when you want HushClaw to track a background run.">Create one when you want HushClaw to track a background run.</span></div>';
     return;
   }
   el.innerHTML = "";
@@ -379,7 +379,7 @@ export function renderScheduledTasks(tasks) {
   const el = document.getElementById("scheduled-list");
   if (!el) return;
   if (!tasks.length) {
-    el.innerHTML = '<div class="tasks-empty">No scheduled tasks yet.</div>';
+    el.innerHTML = '<div class="tasks-empty" data-i18n="ui:No scheduled tasks yet.">No scheduled tasks yet.</div>';
     return;
   }
   el.innerHTML = "";

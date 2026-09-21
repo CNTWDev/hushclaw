@@ -44,8 +44,8 @@ export function renderInsights(items, hasMore = false, offset = 0, view = tasksS
   el.innerHTML = "";
   if (!tasksState.insights.length) {
     el.innerHTML = tasksState.insightView === "suggested"
-      ? '<div class="insights-empty"><strong>No suggested insights</strong><span>Auto-extracted candidates will appear here for review.</span></div>'
-      : '<div class="insights-empty"><strong>No curated insights yet</strong><span>Save or promote sharp principles, quotes, and methods worth reusing.</span></div>';
+      ? '<div class="insights-empty"><strong data-i18n="ui:No suggested insights">No suggested insights</strong><span data-i18n="ui:Auto-extracted candidates will appear here for review.">Auto-extracted candidates will appear here for review.</span></div>'
+      : '<div class="insights-empty"><strong data-i18n="ui:No curated insights yet">No curated insights yet</strong><span data-i18n="ui:Save or promote sharp principles, quotes, and methods worth reusing.">Save or promote sharp principles, quotes, and methods worth reusing.</span></div>';
     return;
   }
   tasksState.insights.forEach(item => el.appendChild(buildInsightRow(item)));
@@ -181,9 +181,9 @@ function cleanupCandidateMarkup(item, action = "keep") {
         <div class="insight-cleanup-meta"><span>${type}</span><span>${reason}</span></div>
       </div>
       <select class="insight-cleanup-action" data-note-id="${id}">
-        <option value="keep" ${action === "keep" ? "selected" : ""}>Keep as Memory</option>
-        <option value="promote" ${action === "promote" ? "selected" : ""}>Promote</option>
-        <option value="delete" ${action === "delete" ? "selected" : ""}>Delete</option>
+        <option value="keep" ${action === "keep" ? "selected" : ""} data-i18n="ui:Keep as Memory">Keep as Memory</option>
+        <option value="promote" ${action === "promote" ? "selected" : ""} data-i18n="ui:Promote">Promote</option>
+        <option value="delete" ${action === "delete" ? "selected" : ""} data-i18n="ui:Delete">Delete</option>
       </select>
     </div>`;
 }
@@ -201,16 +201,16 @@ function openInsightCleanupDialog(data) {
       </div>
       ${autoDelete.length ? `
         <div class="insight-cleanup-section">
-          <h4>Auto delete</h4>
-          <p>These look like fragments or unfinished questions. They will be hard deleted when you apply.</p>
+          <h4 data-i18n="ui:Auto delete">Auto delete</h4>
+          <p data-i18n="ui:These look like fragments or unfinished questions. They will be hard deleted when you apply.">These look like fragments or unfinished questions. They will be hard deleted when you apply.</p>
           <div class="insight-cleanup-list compact">${autoPreview}</div>
         </div>` : ""}
       ${review.length ? `
         <div class="insight-cleanup-section">
-          <h4>Review</h4>
+          <h4 data-i18n="ui:Review">Review</h4>
           <div class="insight-cleanup-list">${reviewMarkup}</div>
         </div>` : ""}
-      ${data.has_more ? '<div class="insight-cleanup-more">More candidates exist. Run cleanup again after applying this batch.</div>' : ""}
+      ${data.has_more ? '<div class="insight-cleanup-more" data-i18n="ui:More candidates exist. Run cleanup again after applying this batch.">More candidates exist. Run cleanup again after applying this batch.</div>' : ""}
     </div>`;
   openDialog({
     title: "Clean Insights",

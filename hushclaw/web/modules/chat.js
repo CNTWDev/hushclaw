@@ -1,3 +1,4 @@
+import { uiText } from "./i18n.js";
 /**
  * chat.js — Chat message rendering, thinking indicator, session history.
  *
@@ -776,7 +777,7 @@ function _renderInlineReferences(container, references = []) {
     item.classList.add("ai-context-card");
     const role = ref.role ? `${ref.role}: ` : "";
     item.innerHTML = `
-      <span class="msg-inline-reference-label">引用</span>
+      <span class="msg-inline-reference-label" data-i18n="ui:Reference">引用</span>
       <span class="msg-inline-reference-text">${escHtml(`${role}${ref.preview || ref.message_id}`)}</span>
     `;
     wrap.appendChild(item);
@@ -1006,7 +1007,7 @@ export function insertThinkingMsg(startTime = Date.now()) {
   msgEl.classList.add("thinking-msg");
   const activity = createAgentActivity({
     label: "Thinking",
-    detail: "正在准备请求…",
+    detail: uiText("Preparing request…"),
     state: AI_STATES.RUNNING,
     startedAt: startTime,
   });
@@ -1014,7 +1015,7 @@ export function insertThinkingMsg(startTime = Date.now()) {
   const details = document.createElement("button");
   details.type = "button";
   details.className = "chat-progress-details";
-  details.textContent = "执行详情";
+  details.textContent = uiText("Execution details");
   details.setAttribute("aria-controls", "runtime-monitor");
   details.hidden = !isDevMode();
   details.addEventListener("click", () => setWorkbenchPanelVisible("runtime", true));
@@ -1025,7 +1026,7 @@ export function insertThinkingMsg(startTime = Date.now()) {
   scrollToBottom();
   state._thinkingEl    = msgEl;
   state._thinkingStart = startTime;
-  state._thinkingStatus = "正在准备请求…";
+  state._thinkingStatus = uiText("Preparing request…");
   _renderThinkingStatus();
   state._thinkingTimer = setInterval(_renderThinkingStatus, 1000);
   _chatPerfPush("thinking-start");
@@ -1038,9 +1039,9 @@ function _renderThinkingStatus() {
   const sec = Math.max(0, Math.floor((Date.now() - (state._thinkingStart || Date.now())) / 1000));
   const activity = bubbleEl.querySelector(".ai-activity");
   const details = bubbleEl.querySelector(".chat-progress-details");
-  if (details) details.hidden = !isDevMode();
+  if (details) { details.hidden = !isDevMode(); details.textContent = uiText("Execution details"); }
   const detail = thinkingActivityDetail(
-    state._thinkingStatus || "正在准备请求…", state._thinkingPhase,
+    state._thinkingStatus || uiText("Preparing request…"), state._thinkingPhase,
     state._thinkingStageStart || state._thinkingStart,
   );
   if (activity?.updateActivity) {
@@ -1130,7 +1131,7 @@ function _renderSessionSummary(summary, parent = els.messages) {
   const { msgEl, bubbleEl, contentEl } = createMsgBubble("system");
   msgEl.classList.add("session-history-block");
   bubbleEl.classList.add("session-history-summary");
-  bubbleEl.innerHTML = `<div class="session-history-label">Compaction Summary</div><div class="session-history-markdown"></div>`;
+  bubbleEl.innerHTML = `<div class="session-history-label" data-i18n="ui:Compaction Summary">Compaction Summary</div><div class="session-history-markdown"></div>`;
   const summaryEl = bubbleEl.querySelector(".session-history-markdown");
   setMarkdownContent(summaryEl, summary, { surface: "chat" });
   bubbleEl._raw = summary;
@@ -1160,7 +1161,7 @@ function _renderSessionLineage(lineage, parent = els.messages) {
     `;
   }).join("");
   bubbleEl.innerHTML = `
-    <div class="session-history-label">Lineage</div>
+    <div class="session-history-label" data-i18n="ui:Lineage">Lineage</div>
     <div class="session-lineage-list">${items}</div>
   `;
   parent.appendChild(msgEl);

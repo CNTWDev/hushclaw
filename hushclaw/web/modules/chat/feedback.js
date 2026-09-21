@@ -68,7 +68,7 @@ function reviewDraft(target, quote) {
 async function openFeedback(target, selected = '', action = '') {
   let close, host, loaded;
   close = openDialog({ title: '评价与观点摘记', cardClass: 'message-feedback-dialog',
-    html: '<div id="message-feedback-editor" class="feedback-editor" aria-live="polite">正在读取…</div>',
+    html: '<div id="message-feedback-editor" class="feedback-editor" aria-live="polite" data-i18n="ui:Reading…">正在读取…</div>',
     actions: [{label:'完成', onClick: () => close()}],
     onOpen: () => { host = document.getElementById('message-feedback-editor'); },
   });
