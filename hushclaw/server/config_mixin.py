@@ -37,6 +37,8 @@ class ConfigMixin:
         cfg = self._gateway.base_agent.config
         provider = cfg.provider.name
         api_key = cfg.provider.api_key
+        from hushclaw.providers.voxnexus_auth import settings_config
+        vox_config = settings_config(cfg.provider)
 
         from hushclaw.config.loader import get_config_dir, _load_toml
         cfg_file_path = get_config_dir() / "hushclaw.toml"
@@ -95,8 +97,8 @@ class ConfigMixin:
             "model": cfg.agent.model,
             "base_url": cfg.provider.base_url or "",
             "provider_timeout": cfg.provider.timeout,
-            "voxnexus": {"issuer": cfg.provider.voxauth_issuer, "client_id": cfg.provider.voxauth_client_id,
-                         "gateway": (cfg.provider.base_url or "") if provider == "voxnexus" else ""},
+            "voxnexus": {"issuer": vox_config.voxauth_issuer, "client_id": vox_config.voxauth_client_id,
+                         "gateway": vox_config.base_url},
             "public_base_url": cfg.server.public_base_url or "",
             "api_key_set": bool(api_key),
             "api_key_saved": api_key_saved,

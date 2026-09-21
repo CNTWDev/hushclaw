@@ -92,7 +92,7 @@ export function renderModelTab(load = true) {
     <section class="vox-profile settings-section">
       <div class="vox-profile-head"><div class="vox-avatar" aria-hidden="true">V</div><div><h2>VoxNexus</h2><p>${escHtml(account?.email || (vox.authed ? '已登录' : '个人中心'))}</p></div><span class="vox-badge">${vox.pending ? '等待浏览器授权' : vox.authed ? '已登录' : '未登录'}</span></div>
       <p class="wdesc">一个账号，管理模型、额度与充值。</p>
-      ${!vox.deploymentReady ? '<p class="vox-message">网关尚未配置，请由部署者填写 VoxNexus 网关地址和 VoxAuth client_id。</p>' : ''}
+      ${!vox.deploymentReady ? '<p class="vox-message">正在等待服务端加载 VoxNexus 登录配置。如持续出现，请重启 HushClaw 服务并刷新页面。</p>' : ''}
       <div class="vox-actions">
         ${!vox.authed ? `<button type="button" id="vox-login" ${!vox.deploymentReady || vox.pending || busy ? 'disabled' : ''}>登录 VoxNexus</button>` : ''}
         ${vox.authed || vox.pending ? `<button type="button" id="vox-logout" class="secondary" ${busy ? 'disabled' : ''}>${vox.pending ? '取消登录' : '退出登录'}</button>` : ''}

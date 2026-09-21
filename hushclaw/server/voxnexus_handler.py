@@ -7,14 +7,12 @@ import urllib.parse
 import webbrowser
 
 from hushclaw.exceptions import ProviderError
-from hushclaw.providers.voxnexus_auth import get_session
+from hushclaw.providers.voxnexus_auth import get_session, settings_config
 
 
 def session_from_data(data, gateway):
     # Endpoint/client identity are deployment settings, never browser-controlled.
-    config = gateway.base_agent.config.provider
-    if config.name != "voxnexus":
-        raise ProviderError("请由部署者将 provider.name 配置为 voxnexus，并设置网关地址与 client_id。")
+    config = settings_config(gateway.base_agent.config.provider)
     return get_session(config)
 
 

@@ -247,11 +247,15 @@ async def test_config_save_gate_runs_before_any_write(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_valid_model_save_pins_deployment_and_never_persists_oauth(tmp_path):
+@pytest.mark.parametrize("legacy", [False, True])
+async def test_valid_model_save_pins_deployment_and_never_persists_oauth(tmp_path, legacy):
     import tomllib
     from hushclaw.config.schema import Config
     from hushclaw.server.config_handler import handle_save_config
     cfg = Config(provider=ProviderConfig(name='voxnexus', base_url='https://gateway.example', voxauth_client_id='registered'))
+    if legacy:
+        cfg.provider = ProviderConfig(name='transsion', base_url='https://legacy.example/v1', api_key='legacy-key')
+        (tmp_path / 'hushclaw.toml').write_text('[provider]\nname = "transsion"\napi_key = "legacy-key"\nbase_url = "https://legacy.example/v1"\n[transsion]\naccess_token = "legacy-session"\n')
     s = session()
     s.tokens = tokens()
     s.request = AsyncMock(side_effect=[{'status': 'active', 'available': 10}, {'data': [{'id': 'model-a'}]}])
@@ -264,11 +268,13 @@ async def test_valid_model_save_pins_deployment_and_never_persists_oauth(tmp_pat
     assert ws.result['ok'], ws.result
     raw = (tmp_path / 'hushclaw.toml').read_text()
     saved = tomllib.loads(raw)
-    assert saved['provider']['base_url'] == 'https://gateway.example'
-    assert saved['provider']['voxauth_client_id'] == 'registered'
+    assert saved['provider']['name'] == 'voxnexus'
+    assert saved['provider']['base_url'] == ('https://aon-ai-gateway.voxnexus.ai' if legacy else 'https://gateway.example')
+    assert saved['provider']['voxauth_client_id'] == ('hushclaw-desktop' if legacy else 'registered')
+    assert 'transsion' not in saved
     assert saved['agent']['model'] == 'model-a'
     assert applied == [True]
-    assert all(value not in raw for value in ('never-save-me', 'old-access', 'old-refresh', 'api_key ='))
+    assert all(value not in raw for value in ('never-save-me', 'old-access', 'old-refresh', 'legacy-key', 'legacy-session', 'api_key ='))
 
 
 def test_plaintext_keyring_backend_is_rejected():
@@ -283,3 +289,20 @@ def test_plaintext_keyring_backend_is_rejected():
 def test_unconfigured_provider_can_start_without_api_key_or_keyring():
     from hushclaw.providers.registry import get_provider
     assert isinstance(get_provider(ProviderConfig()), VoxNexusProvider)
+
+
+@pytest.mark.asyncio
+async def test_legacy_router_can_start_login_with_builtin_voxnexus_identity():
+    cfg = ProviderConfig(name='transsion', base_url='https://legacy.example/v1', api_key='legacy-key')
+    gateway = SimpleNamespace(base_agent=SimpleNamespace(config=SimpleNamespace(provider=cfg)))
+    s = session(); s.start_login = AsyncMock(return_value='https://auth.voxnexus.ai/oauth/authorize')
+    ws = WS()
+    with patch('hushclaw.server.voxnexus_handler.get_session', return_value=s) as get, patch('webbrowser.open'):
+        await handle_voxnexus(ws, {'action': 'login', 'base_url': 'https://untrusted.example'}, gateway)
+    assert ws.result['ok'], ws.result
+    resolved = get.call_args.args[0]
+    assert resolved.name == 'voxnexus'
+    assert resolved.base_url == 'https://aon-ai-gateway.voxnexus.ai'
+    assert resolved.voxauth_client_id == 'hushclaw-desktop'
+    assert resolved.api_key == '' and resolved.api_keys == []
+    assert cfg.name == 'transsion'  # Persist the switch only on successful model save.

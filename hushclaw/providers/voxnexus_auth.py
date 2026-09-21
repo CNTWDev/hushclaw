@@ -260,6 +260,19 @@ class VoxSession:
 _sessions = {}
 
 
+def settings_config(config):
+    """Resolve the one WebUI gateway without inheriting a legacy router's URL/key.
+
+    Existing CLI providers remain usable until the user saves a VoxNexus model.
+    Account status, login and the model-save gate must use this same identity.
+    """
+    from hushclaw.config.schema import ProviderConfig
+    if config.name == "voxnexus":
+        return config
+    return ProviderConfig(timeout=config.timeout, max_retries=config.max_retries,
+                          retry_base_delay=config.retry_base_delay)
+
+
 def get_session(config):
     key = (config.base_url or "", config.voxauth_issuer, config.voxauth_client_id)
     if key not in _sessions:

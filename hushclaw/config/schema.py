@@ -159,6 +159,9 @@ class ProviderConfig:
             raise ConfigError(f"max_retries must be >= 0, got {self.max_retries}")
         if self.name == "voxnexus" and not (self.base_url or "").strip():
             self.base_url = DEFAULT_VOXNEXUS_BASE_URL
+        if self.name == "voxnexus":
+            self.voxauth_issuer = (self.voxauth_issuer or "").strip() or "https://auth.voxnexus.ai"
+            self.voxauth_client_id = (self.voxauth_client_id or "").strip() or "hushclaw-desktop"
 
     @property
     def credential_pool(self) -> list[str]:

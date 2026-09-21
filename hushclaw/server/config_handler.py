@@ -86,12 +86,12 @@ async def handle_save_config(ws, data: dict, apply_config, credential_service=No
     if prov_in or any(k in incoming.get("agent", {}) for k in ("model", "cheap_model")):
         try:
             from hushclaw.config.loader import load_config
-            from hushclaw.providers.voxnexus_auth import get_session
+            from hushclaw.providers.voxnexus_auth import get_session, settings_config
             from hushclaw.server.voxnexus_handler import require_available
             from hushclaw.exceptions import ProviderError
-            active = load_config().provider
-            if active.name != "voxnexus" or prov_in.get("name", "voxnexus") != "voxnexus":
-                raise ProviderError("Settings 仅支持 VoxNexus，请先完成网关部署配置。")
+            active = settings_config(load_config().provider)
+            if prov_in.get("name", "voxnexus") != "voxnexus":
+                raise ProviderError("Settings 仅支持 VoxNexus。")
             session = get_session(active)
             await require_available(session)
             ids = {m["id"] for m in (await session.request("/v1/models")).get("data", []) if isinstance(m, dict) and m.get("id")}

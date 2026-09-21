@@ -16,7 +16,7 @@ voxauth_issuer = "https://auth.voxnexus.ai"
 voxauth_client_id = "hushclaw-desktop"
 ```
 
-也支持 `HUSHCLAW_PROVIDER=voxnexus`、`HUSHCLAW_BASE_URL`、`HUSHCLAW_VOXAUTH_CLIENT_ID`、`HUSHCLAW_VOXAUTH_ISSUER`。网关根地址或以 `/v1` 结尾的地址均可。Settings 不提供修改部署地址、其他 router 或 API Key 的表单，也不接受浏览器提供的端点替换。旧部署需先由部署者修改配置并重启；普通用户无需填写这些信息。底层旧 provider 适配器仅为已有 CLI/库调用保留。
+也支持 `HUSHCLAW_PROVIDER=voxnexus`、`HUSHCLAW_BASE_URL`、`HUSHCLAW_VOXAUTH_CLIENT_ID`、`HUSHCLAW_VOXAUTH_ISSUER`。网关根地址或以 `/v1` 结尾的地址均可。Settings 不提供修改部署地址、其他 router 或 API Key 的表单，也不接受浏览器提供的端点替换。旧部署仍保存其他 provider 时，Settings 自动使用内置的 VoxNexus 网关和公开客户端进行登录，不复用旧渠道的 URL 或 API Key。登录并成功保存模型后，会把 provider 切换为 VoxNexus 并清除旧模型渠道凭证；无需用户手工改配置。代码升级后需重启 Python 服务以加载新逻辑。底层旧 provider 适配器仅为已有 CLI/库调用保留。
 
 `https://router.voxnexus.ai/v1` 是网关内部上游，HushClaw 不直接连接，也不需要上游密钥。网关要求令牌 audience 为 `voxauth`、scope 包含 `aon-gateway`；令牌由 VoxAuth 签发并由网关验证，客户端不自行拼接 JWT，也不额外假设未在接入文档中定义的 audience 授权参数。
 

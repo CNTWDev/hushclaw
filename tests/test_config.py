@@ -1427,3 +1427,25 @@ def test_app_connector_managed_oauth_uses_broker_and_local_custody(monkeypatch, 
     assert secrets.get("gw.refresh") == "managed-refresh"
     assert calls[1][0] == "https://broker.example.com/oauth/google_workspace/handoff/exchange"
     assert calls[1][2]["handoff_code"] == "handoff-123"
+
+
+def test_legacy_router_status_exposes_builtin_voxnexus_login(monkeypatch, tmp_path):
+    import hushclaw.config.loader as loader_mod
+    from hushclaw.config.schema import ProviderConfig
+    monkeypatch.setattr(loader_mod, "get_config_dir", lambda: tmp_path)
+    cfg = Config(provider=ProviderConfig(name="transsion", base_url="https://legacy.example/v1", api_key="legacy-key"))
+    status = _FakeConfigServer(cfg)._config_status()
+    assert status["configured"] is False
+    assert status["voxnexus"] == {
+        "gateway": "https://aon-ai-gateway.voxnexus.ai",
+        "issuer": "https://auth.voxnexus.ai",
+        "client_id": "hushclaw-desktop",
+    }
+
+
+def test_empty_voxnexus_oauth_fields_use_product_defaults():
+    from hushclaw.config.schema import ProviderConfig
+    cfg = ProviderConfig(name="voxnexus", base_url="", voxauth_issuer=" ", voxauth_client_id="")
+    assert cfg.base_url == "https://aon-ai-gateway.voxnexus.ai"
+    assert cfg.voxauth_issuer == "https://auth.voxnexus.ai"
+    assert cfg.voxauth_client_id == "hushclaw-desktop"
