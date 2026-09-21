@@ -1,5 +1,18 @@
 /** Authored product copy only. Never translate user content through this catalogue. */
 export const UI_MESSAGES = Object.fromEntries([
+  ["Quick use", "快捷使用"],
+  ["Files", "文件"],
+  ["Search files", "搜索文件"],
+  ["Filters and sort", "筛选与排序"],
+  ["Important", "重要"],
+  ["Tags", "标签"],
+  ["Uploads", "上传"],
+  ["Generated", "生成"],
+  ["File sort order", "文件排序"],
+  ["Show files rated four stars or higher", "只显示四星及以上文件"],
+  ["Close details panel", "关闭详情面板"],
+  ["{n} matches", "{n} 个匹配结果"],
+
   ["Connections", "连接"],
   ["Manage apps, channels, and sync sources", "管理应用、消息渠道和同步来源"],
   ["Primary navigation", "主导航"],

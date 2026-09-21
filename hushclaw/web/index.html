@@ -256,12 +256,12 @@
     <div id="drawer-scrim"></div>
     <!-- Chat panel (left: workspace strip + sessions sidebar, right: chat area) -->
     <div id="panel-chat" class="panel active">
-      <div id="workspace-tab-strip" class="hidden"></div>
       <div id="sessions-sidebar">
         <div class="sidebar-header">
           <div class="sidebar-heading">
             <span class="sidebar-eyebrow" data-i18n="ui:PERSONAL WORKSPACE">PERSONAL WORKSPACE</span>
             <span class="sidebar-title" data-i18n="sessions">Threads</span>
+            <div id="workspace-tab-strip" class="hidden"></div>
           </div>
           <div class="sidebar-actions">
             <button id="btn-new-session-sidebar" class="sidebar-new-chat" type="button" title="Start a new conversation" aria-label="Start a new conversation" data-i18n-title="ui:Start a new conversation" data-i18n-aria="ui:Start a new conversation">
@@ -286,32 +286,33 @@
           <span id="reconnect-msg" data-i18n="ws_reconnecting">Connection lost — reconnecting…</span>
           <span id="reconnect-countdown" class="reconnect-countdown"></span>
         </div>
-        <section id="chat-stats-strip" class="chat-stats-strip" aria-label="Workspace context">
-          <div class="chat-assistant-identity" aria-label="Pip, HushClaw companion">
-            <span class="pip-face pip-face-large" aria-hidden="true">
-              <i class="pip-ear pip-ear-left"></i><i class="pip-ear pip-ear-right"></i>
-              <i class="pip-eye pip-eye-left"></i><i class="pip-eye pip-eye-right"></i>
-            </span>
-            <span class="chat-assistant-copy">
-              <strong>Pip</strong>
-            </span>
-          </div>
-          <div id="chat-context-meta" class="chat-context-meta"></div>
-          <div class="chat-context-actions" aria-label="Chat panel actions">
-            <div class="ui-slot ui-slot-header-actions" data-ui-slot="conversation.header.actions"></div>
-            <button id="btn-toggle-sessions-inline" class="chat-context-action hidden" type="button" title="Show sessions" aria-label="Show sessions">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M2.5 3h9M2.5 7h9M2.5 11h9" stroke="currentColor" stroke-width="1.45" stroke-linecap="round"/></svg>
-            </button>
-            <button id="btn-toggle-runtime-inline" class="chat-context-action hidden" type="button" title="Show runtime monitor" aria-label="Show runtime monitor" aria-controls="runtime-monitor" aria-expanded="false">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="1.6" fill="currentColor"/><path d="M7 2.25V1.5M7 12.5v-.75M3.64 3.64l-.53-.53M10.89 10.89l-.53-.53M2.25 7H1.5M12.5 7h-.75M3.64 10.36l-.53.53M10.89 3.11l-.53.53" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
-            </button>
-            <button id="btn-toggle-files-inline" class="chat-context-action" type="button" title="Open files panel" aria-label="Open files panel" aria-controls="files-sidebar" aria-expanded="false">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M2.5 3.25A1.25 1.25 0 0 1 3.75 2h2.4l1.1 1.25h3A1.25 1.25 0 0 1 11.5 4.5v5.75a1.25 1.25 0 0 1-1.25 1.25h-6.5A1.25 1.25 0 0 1 2.5 10.25v-7Z" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/><path d="M4.3 7h5.4M4.3 9h3.2" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"/></svg>
-            </button>
-          </div>
-        </section>
         <div id="chat-workspace" class="chat-workspace">
+          <button id="workbench-scrim" type="button" aria-label="Close details panel" data-i18n-aria="ui:Close details panel" tabindex="-1"></button>
           <div id="chat-main-column" class="chat-main-column">
+            <section id="chat-stats-strip" class="chat-stats-strip" aria-label="Workspace context">
+              <div class="chat-assistant-identity" aria-label="Pip, HushClaw companion">
+                <span class="pip-face pip-face-large" aria-hidden="true">
+                  <i class="pip-ear pip-ear-left"></i><i class="pip-ear pip-ear-right"></i>
+                  <i class="pip-eye pip-eye-left"></i><i class="pip-eye pip-eye-right"></i>
+                </span>
+                <span class="chat-assistant-copy">
+                  <strong>Pip</strong>
+                </span>
+              </div>
+              <div id="chat-context-meta" class="chat-context-meta"></div>
+              <div class="chat-context-actions" aria-label="Chat panel actions">
+                <div class="ui-slot ui-slot-header-actions" data-ui-slot="conversation.header.actions"></div>
+                <button id="btn-toggle-sessions-inline" class="chat-context-action hidden" type="button" title="Show sessions" aria-label="Show sessions">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M2.5 3h9M2.5 7h9M2.5 11h9" stroke="currentColor" stroke-width="1.45" stroke-linecap="round"/></svg>
+                </button>
+                <button id="btn-toggle-runtime-inline" class="chat-context-action hidden" type="button" title="Show runtime monitor" aria-label="Show runtime monitor" aria-controls="runtime-monitor" aria-expanded="false">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="1.6" fill="currentColor"/><path d="M7 2.25V1.5M7 12.5v-.75M3.64 3.64l-.53-.53M10.89 10.89l-.53-.53M2.25 7H1.5M12.5 7h-.75M3.64 10.36l-.53.53M10.89 3.11l-.53.53" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+                </button>
+                <button id="btn-toggle-files-inline" class="chat-context-action" type="button" title="Open files panel" aria-label="Open files panel" aria-controls="files-sidebar" aria-expanded="false">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M2.5 3.25A1.25 1.25 0 0 1 3.75 2h2.4l1.1 1.25h3A1.25 1.25 0 0 1 11.5 4.5v5.75a1.25 1.25 0 0 1-1.25 1.25h-6.5A1.25 1.25 0 0 1 2.5 10.25v-7Z" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/><path d="M4.3 7h5.4M4.3 9h3.2" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"/></svg>
+                </button>
+              </div>
+            </section>
             <div id="messages" role="log" aria-live="polite"></div>
             <div id="chat-composer" class="chat-composer">
               <div id="handover-banner" class="handover-banner hidden">
@@ -349,7 +350,7 @@
             <section id="files-sidebar" class="workbench-card workbench-section workbench-files hidden" aria-label="Files workbench">
               <div class="workbench-section-head files-sidebar-header">
                 <div class="workbench-section-head-copy">
-                  <div class="workbench-section-title">Files <span id="files-total" class="files-total"></span></div>
+                  <div class="workbench-section-title"><span data-i18n="ui:Files">Files</span> <span id="files-total" class="files-total"></span></div>
                 </div>
                 <div class="workbench-section-actions files-sidebar-actions">
                   <button id="btn-refresh-files" class="ui-icon-action" title="刷新文件" aria-label="刷新文件" data-i18n-title="ui:Refresh files" data-i18n-aria="ui:Refresh files"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5M20 12a8 8 0 1 0-2 5M20 7l-3-3"/></svg></button>

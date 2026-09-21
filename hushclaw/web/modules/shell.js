@@ -120,7 +120,7 @@ wireColumnResize({
   handleId: "workbench-resize-handle",
   variable: "--workbench-w",
   key: WORKBENCH_WIDTH_KEY,
-  initial: 360,
+  initial: 324,
   min: 300,
   max: 520,
   direction: -1,
@@ -131,3 +131,25 @@ document.addEventListener("locale-changed", () => {
   toggle?.setAttribute("aria-label", label);
   if (toggle) toggle.title = label;
 });
+
+// Drawers can be dismissed without changing the saved width or remounting chat.
+function dismissDetails() {
+  const panel = document.getElementById("chat-workbench");
+  if (!panel || panel.classList.contains("hidden")) return;
+  document.dispatchEvent(new CustomEvent("hc:close-workbench"));
+}
+document.getElementById("workbench-scrim")?.addEventListener("click", dismissDetails);
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || window.innerWidth > 1100) return;
+  if (document.querySelector('.app-modal-overlay:not(.hidden), .wizard-overlay:not(.hidden)')) return;
+  dismissDetails();
+});
+
+// Match the writing edge to the reading edge with native or overlay scrollbars.
+const messageViewport = document.getElementById("messages");
+if (messageViewport && typeof ResizeObserver !== "undefined") {
+  new ResizeObserver(() => {
+    const gutter = Math.max(0, (messageViewport.offsetWidth - messageViewport.clientWidth) / 2);
+    messageViewport.style.setProperty("--chat-scrollbar-gutter", `${gutter}px`);
+  }).observe(messageViewport);
+}

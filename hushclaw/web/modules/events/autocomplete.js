@@ -267,9 +267,10 @@ function _recommendationItems() {
 function _getRecommendationEl() {
   let el = document.getElementById("composer-recommendations");
   if (!el) {
-    el = document.createElement("div");
+    el = document.createElement("details");
     el.id = "composer-recommendations";
     el.className = "composer-recommendations hidden";
+    el.dataset.i18nAria = "ui:Quick use";
     el.setAttribute("aria-label", "Quick use");
     const composer = document.getElementById("chat-composer");
     const inputWrap = document.querySelector(".input-wrap");
@@ -285,6 +286,8 @@ export function insertQuickRecommendation(kind, name) {
   els.input.value = `${value.slice(0, cursor)}${insertText}${value.slice(cursor)}`;
   const position = cursor + insertText.length;
   els.input.setSelectionRange(position, position);
+  const recommendations = document.getElementById("composer-recommendations");
+  if (recommendations) recommendations.open = false;
   _rememberRecommendation(kind, name);
   hideSlashCommandList();
   hideAgentMentionList();
@@ -307,10 +310,14 @@ export function refreshComposerRecommendations() {
     return;
   }
   el.innerHTML = "";
-  const label = document.createElement("span");
+  const label = document.createElement("summary");
+  label.dataset.i18n = "ui:Quick use";
   label.className = "composer-recommendations-label";
   label.textContent = "Quick use";
   el.appendChild(label);
+  const choices = document.createElement("div");
+  choices.className = "composer-recommendation-choices";
+  el.appendChild(choices);
   items.forEach((item) => {
     const button = document.createElement("button");
     button.type = "button";
@@ -319,7 +326,7 @@ export function refreshComposerRecommendations() {
     button.textContent = `${item.kind === "agent" ? "@" : "/"}${item.name}`;
     button.setAttribute("aria-label", `Use ${item.kind} ${item.name}`);
     button.addEventListener("click", () => insertQuickRecommendation(item.kind, item.name));
-    el.appendChild(button);
+    choices.appendChild(button);
   });
   el.classList.remove("hidden");
 }

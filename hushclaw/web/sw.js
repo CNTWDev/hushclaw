@@ -1,4 +1,4 @@
-const CACHE = "hushclaw-v55";
+const CACHE = "hushclaw-v56";
 const STATIC = [
   "/modules/i18n-catalog.js",
   "/modules/settings/voxnexus.js",

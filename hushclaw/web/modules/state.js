@@ -805,7 +805,7 @@ function _normalizeWorkbenchPanelName(panel) {
 function _workbenchPanelDefaultVisible(panel) {
   // Keep the conversation canvas calm on first load. Supporting panels remain
   // one click away and remember an explicit user preference afterwards.
-  if (panel === "files") return window.innerWidth > 960;
+  if (panel === "files") return false;
   if (panel === "activity" || panel === "runtime") return false;
   return false;
 }

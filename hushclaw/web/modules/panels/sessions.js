@@ -916,14 +916,6 @@ function _showMoveWorkspacePopover(anchorEl, sessionId, currentWorkspace) {
 
 // ── Workspace tab strip ────────────────────────────────────────────────────
 
-function _workspaceTone(name) {
-  if (!name) return "default";
-  const tones = ["emerald", "sky", "violet", "rose", "amber", "indigo"];
-  let hash = 0;
-  for (const ch of String(name)) hash = ((hash * 31) + ch.charCodeAt(0)) >>> 0;
-  return tones[hash % tones.length];
-}
-
 function _switchWorkspace(name) {
   toggleSessionsSidebar(false);
   const prev = state.activeWorkspace;
@@ -935,11 +927,8 @@ function _switchWorkspace(name) {
       localStorage.removeItem("hushclaw.ui.workspace");
     }
   } catch {}
-  document.querySelectorAll("#workspace-tab-strip .ws-tab").forEach(btn => {
-    const isActive = (btn.dataset.ws || null) === state.activeWorkspace;
-    btn.classList.toggle("active", isActive);
-    btn.setAttribute("aria-pressed", isActive ? "true" : "false");
-  });
+  const selector = document.getElementById("workspace-select");
+  if (selector) selector.value = state.activeWorkspace || "";
   if (prev !== state.activeWorkspace) {
     clearCurrentSessionId();
     resetChatSessionUiState();
@@ -968,25 +957,20 @@ export function renderWorkspaceSelector(workspacesList) {
   }
 
   strip.innerHTML = "";
-  const tabs = [
-    { name: "", label: "Default", title: "Default workspace" },
-    ...state.workspacesList.map(ws => ({ name: ws.name, label: ws.name, title: ws.path })),
-  ];
-
-  for (const { name, label, title } of tabs) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "ws-tab" + ((state.activeWorkspace === (name || null)) ? " active" : "");
-    btn.dataset.ws = name;
-    btn.dataset.tone = _workspaceTone(name);
-    btn.title = title;
-    btn.textContent = name ? label : uiText("Default");
-    if (!name) { btn.dataset.i18n = "ui:Default"; btn.dataset.i18nTitle = "ui:Default workspace"; btn.title = uiText("Default workspace"); }
-    btn.setAttribute("aria-label", `${label} workspace`);
-    btn.setAttribute("aria-pressed", (state.activeWorkspace === (name || null)) ? "true" : "false");
-    btn.addEventListener("click", () => _switchWorkspace(name || null));
-    strip.appendChild(btn);
+  const selector = document.createElement("select");
+  selector.id = "workspace-select";
+  selector.dataset.i18nAria = "ui:Workspace";
+  selector.setAttribute("aria-label", uiText("Workspace"));
+  for (const workspace of [{name: ""}, ...state.workspacesList]) {
+    const option = document.createElement("option");
+    option.value = workspace.name;
+    option.textContent = workspace.name || uiText("Default workspace");
+    if (!workspace.name) option.dataset.i18n = "ui:Default workspace";
+    selector.appendChild(option);
   }
+  selector.value = state.activeWorkspace || "";
+  selector.addEventListener("change", () => _switchWorkspace(selector.value || null));
+  strip.appendChild(selector);
 
   strip.classList.remove("hidden");
   refreshChatStats();

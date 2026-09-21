@@ -15,6 +15,7 @@ import {
 import { markdownSurfaceClass, setMarkdownContent, unmountMarkdown } from "../markdown.js";
 import { openConfirm, openDialog, closeModal } from "../modal.js";
 import { uploadFile, addExistingAttachment, renderAttachmentChips } from "../events/upload.js";
+import { uiText } from "../i18n.js";
 import { resolveFileUrl } from "../http.js";
 
 const _LIMIT = 20;
@@ -26,6 +27,7 @@ let _nextCursor = "";
 let _cursorStack = [];
 let _sourceFilter = "all"; // "all" | "upload" | "generated"
 let _query = "";
+let _filtersExpanded = false;
 let _minRating = 0;
 let _sortMode = "recent";
 let _tagFilters = [];
@@ -464,12 +466,20 @@ function _renderFileFilters(list) {
     filterBar.className = "files-filter-bar";
     list.parentElement?.insertBefore(filterBar, list);
   }
+  filterBar.classList.toggle("hidden", !_filtersExpanded);
+  const activeCount = Number(_minRating >= 4) + _tagFilters.length + Number(_sortMode !== "recent");
+  const toggle = document.getElementById("files-filters-toggle");
+  if (toggle) {
+    toggle.setAttribute("aria-expanded", String(_filtersExpanded));
+    toggle.classList.toggle("active", activeCount > 0);
+    toggle.querySelector(".filter-count").textContent = activeCount ? String(activeCount) : "";
+  }
   filterBar.innerHTML = `
     <button id="files-important-filter" class="files-filter-btn${_minRating >= 4 ? " files-filter-btn--active" : ""}"
-      type="button" aria-pressed="${_minRating >= 4 ? "true" : "false"}" title="只显示四星及以上文件">★ 重要</button>
+      type="button" aria-pressed="${_minRating >= 4 ? "true" : "false"}" data-i18n="ui:Important" data-i18n-title="ui:Show files rated four stars or higher" title="Show files rated four stars or higher">Important</button>
     <button id="files-tag-filter" class="files-filter-btn${_tagFilters.length ? " files-filter-btn--active" : ""}"
-      type="button" title="按标签筛选"># 标签${_tagFilters.length ? ` · ${_tagFilters.length}` : ""}</button>
-    <select id="files-sort" class="files-sort" aria-label="文件排序">
+      type="button" data-i18n="ui:Tags">Tags</button>
+    <select id="files-sort" class="files-sort" aria-label="File sort order" data-i18n-aria="ui:File sort order">
       <option value="recent"${_sortMode === "recent" ? " selected" : ""} data-i18n="ui:Recently updated">最近更新</option>
       <option value="rating"${_sortMode === "rating" ? " selected" : ""} data-i18n="ui:Importance">重要程度</option>
     </select>
@@ -520,12 +530,12 @@ export function renderFiles(data) {
     list.parentElement?.insertBefore(tabBar, list);
   }
   const tabs = [
-    { key: "all", label: "全部" },
-    { key: "upload", label: "上传" },
-    { key: "generated", label: "生成" },
+    { key: "all", label: "All" },
+    { key: "upload", label: "Uploads" },
+    { key: "generated", label: "Generated" },
   ];
   tabBar.innerHTML = tabs.map(t =>
-    `<button class="files-tab${_sourceFilter === t.key ? " files-tab--active" : ""}" data-source="${t.key}">${t.label}</button>`
+    `<button class="files-tab${_sourceFilter === t.key ? " files-tab--active" : ""}" data-source="${t.key}" aria-pressed="${_sourceFilter === t.key}" data-i18n="ui:${t.label}">${uiText(t.label)}</button>`
   ).join("") + `<button id="files-mark-all-read" class="files-mark-all-read${_unseenGeneratedFiles.size ? "" : " hidden"}"
     type="button" title="Mark every generated file as read" aria-label="Mark all generated files as read" data-i18n="ui:Mark all read">全部已读</button>`;
   tabBar.querySelectorAll(".files-tab").forEach(btn => {
@@ -550,12 +560,17 @@ export function renderFiles(data) {
     searchBar.className = "files-search-bar";
     searchBar.innerHTML = `
       <input id="files-search-input" class="files-search-input" type="search"
-        placeholder="Search files" aria-label="Search files">
+        placeholder="Search files" aria-label="Search files" data-i18n-ph="ui:Search files" data-i18n-aria="ui:Search files">
       <span id="files-search-state" class="files-search-state"></span>
       <button id="files-search-clear" class="files-search-clear" title="Clear search"
         aria-label="Clear search" data-i18n="ui:Clear" data-i18n-title="ui:Clear search" data-i18n-aria="ui:Clear search">Clear</button>
     `;
-    list.parentElement?.insertBefore(searchBar, list);
+    searchBar.insertAdjacentHTML("beforeend", `<button id="files-filters-toggle" class="ui-icon-action" type="button" aria-controls="files-filter-bar" aria-expanded="false" aria-label="Filters and sort" title="Filters and sort" data-i18n-aria="ui:Filters and sort" data-i18n-title="ui:Filters and sort"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 7h16M4 17h16M8 4v6m8 4v6"/></svg><span class="filter-count"></span></button>`);
+    list.parentElement?.insertBefore(searchBar, tabBar);
+    searchBar.querySelector("#files-filters-toggle").addEventListener("click", () => {
+      _filtersExpanded = !_filtersExpanded;
+      _renderFileFilters(list);
+    });
     const createdInput = searchBar.querySelector("#files-search-input");
     const createdClear = searchBar.querySelector("#files-search-clear");
     createdInput?.addEventListener("input", () => {
@@ -597,7 +612,7 @@ export function renderFiles(data) {
   }
   if (searchClear) searchClear.disabled = !_query;
   if (searchState) {
-    searchState.textContent = _query ? `${data.total || 0} match${Number(data.total || 0) === 1 ? "" : "es"}` : "";
+    searchState.textContent = _query ? uiText("{n} matches", {n: data.total || 0}) : "";
   }
 
   _renderFileFilters(list);
@@ -1030,3 +1045,12 @@ function _extLabel(name) {
   const dot = name.lastIndexOf(".");
   return dot >= 0 ? name.slice(dot + 1).toUpperCase().slice(0, 4) : "FILE";
 }
+
+document.addEventListener("hc:close-workbench", () => {
+  setWorkbenchPanelVisible("files", false);
+  setWorkbenchPanelVisible("runtime", false);
+  setWorkbenchPanelVisible("activity", false);
+  closeWorkbenchPreview();
+  _syncFilesPanelVisibility();
+  document.getElementById("btn-toggle-files-inline")?.focus();
+});
