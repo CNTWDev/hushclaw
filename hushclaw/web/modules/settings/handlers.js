@@ -146,7 +146,6 @@ export function handleConfigStatus(cfg) {
           timezone:      a.timezone      || "",
         });
       }
-      if (calendarAccounts.length === 0) calendarAccounts.push(_defaultCalendarAccount());
       setCurrentCalendarTab(0);
       checkCalendarTimezone();
     }
@@ -247,7 +246,8 @@ export function handleConfigStatus(cfg) {
   }
 
   if (cfg.app_connectors) {
-    appConnectors.broker_base_url = cfg.app_connectors.broker_base_url || appConnectors.broker_base_url;
+    appConnectors.broker_base_url = cfg.app_connectors.broker_base_url || "";
+    appConnectors.managed_oauth_available = Boolean(cfg.app_connectors.managed_oauth_available);
     const gh = cfg.app_connectors.github || {};
     appConnectors.github.enabled      = Boolean(gh.enabled);
     appConnectors.github.auth_mode    = gh.auth_mode || "managed";

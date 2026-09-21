@@ -16,6 +16,9 @@ import { renderSystemTab } from "./tab-system.js";
 import { syncFormToState } from "./save.js";
 import { t } from "../i18n.js";
 import { openGoogleCalendarSettings } from "../panels/app_connectors.js";
+import { openConfirm } from "../modal.js";
+import { openCalendarSourceSettings } from "../calendar.js";
+import { EMAIL_PROVIDERS, emailGuide, calendarGuide, syncIntegrationAccount } from "./integration-guides.js";
 
 // ── Settings widget registry ────────────────────────────────────────────────
 const _settingsWidgets = [];
@@ -254,38 +257,19 @@ export function renderMemoryTab() {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function _syncEmailFormToAccount() {
-  const acct = emailAccounts[currentEmailTab];
-  if (!acct) return;
-  acct.label    = (document.getElementById("email-label")?.value    || "").trim();
-  acct.enabled  = Boolean(document.getElementById("email-enabled")?.checked);
-  acct.username = (document.getElementById("email-username")?.value || "").trim();
-  const epwd = (document.getElementById("email-password")?.value || "").trim();
-  if (epwd) acct.password = epwd;
-  acct.imap_host = (document.getElementById("email-imap-host")?.value || "").trim();
-  acct.imap_port = parseInt(document.getElementById("email-imap-port")?.value) || acct.imap_port;
-  acct.smtp_host = (document.getElementById("email-smtp-host")?.value || "").trim();
-  acct.smtp_port = parseInt(document.getElementById("email-smtp-port")?.value) || acct.smtp_port;
-  acct.mailbox   = (document.getElementById("email-mailbox")?.value  || "INBOX").trim();
+  syncIntegrationAccount(emailAccounts[currentEmailTab], 'email');
 }
 
 function _syncCalendarFormToAccount() {
-  const acct = calendarAccounts[currentCalendarTab];
-  if (!acct) return;
-  acct.label         = (document.getElementById("calendar-label")?.value    || "").trim();
-  acct.enabled       = Boolean(document.getElementById("calendar-enabled")?.checked);
-  acct.url           = (document.getElementById("calendar-url")?.value      || "").trim();
-  acct.username      = (document.getElementById("calendar-username")?.value || "").trim();
-  const cpwd = (document.getElementById("calendar-password")?.value || "").trim();
-  if (cpwd) acct.password = cpwd;
-  acct.calendar_name = (document.getElementById("calendar-name")?.value     || "").trim();
+  syncIntegrationAccount(calendarAccounts[currentCalendarTab], 'calendar');
 }
 
 function _renderAccountTabBar(accounts, currentIdx, prefix) {
   const tabs = accounts.map((a, i) => {
     const name = a.label || a.username || `Account ${i + 1}`;
     const active = i === currentIdx ? " active" : "";
-    const del = accounts.length > 1
-      ? `<span class="acct-tab-del" data-${prefix}-del="${i}" title="Delete account">✕</span>`
+    const del = accounts.length > 1 || prefix === "calendar"
+      ? `<button type="button" class="acct-tab-del" data-${prefix}-del="${i}" aria-label="Delete account" title="Delete account">✕</button>`
       : "";
     return `<span class="acct-tab-wrap${active ? " active" : ""}">
       <button class="chip-btn acct-tab${active}" data-${prefix}-tab="${i}">${escHtml(name)}</button>${del}
@@ -298,16 +282,6 @@ function _renderAccountTabBar(accounts, currentIdx, prefix) {
 }
 
 // ── Integrations tab ─────────────────────────────────────────────────────────
-
-const EMAIL_PROVIDERS = [
-  { label: "Gmail",           imap_host: "imap.gmail.com",          smtp_host: "smtp.gmail.com",          imap_port: 993, smtp_port: 587 },
-  { label: "Outlook/Hotmail", imap_host: "outlook.office365.com",   smtp_host: "smtp.office365.com",      imap_port: 993, smtp_port: 587 },
-  { label: "iCloud",          imap_host: "imap.mail.me.com",        smtp_host: "smtp.mail.me.com",        imap_port: 993, smtp_port: 587 },
-  { label: "Zoho Mail",       imap_host: "imap.zoho.com",           smtp_host: "smtp.zoho.com",           imap_port: 993, smtp_port: 587 },
-  { label: "QQ Mail",         imap_host: "imap.qq.com",             smtp_host: "smtp.qq.com",             imap_port: 993, smtp_port: 587 },
-  { label: "163 Mail",        imap_host: "imap.163.com",            smtp_host: "smtp.163.com",            imap_port: 993, smtp_port: 25  },
-  { label: "Custom",          imap_host: "",                         smtp_host: "",                        imap_port: 993, smtp_port: 587 },
-];
 
 const CALDAV_PROVIDERS = [
   { label: "iCloud",          url: "https://caldav.icloud.com" },
@@ -323,13 +297,16 @@ export function renderIntegrationsTab() {
   const calPwdPlaceholder = ca.password_set ? "••••••••  (already set)" : "App password";
 
   els.wizardBody.innerHTML = `
+    <div class="settings-section integration-guide">
+      <h3 class="settings-section-h">单机接入 · 不需要你申请开发者 ID</h3>
+      <p class="settings-hint">Mac 日历优先复用系统授权：在系统设置 → 互联网账户添加 Google、Exchange 或 iCloud，开启日历；再选择允许 HushClaw 读取的日历。这里不会获取系统账户的密码或令牌。</p>
+      <button id="btn-native-calendar-settings" class="chip-btn">管理本机日历来源</button>
+      <p class="settings-hint">邮箱按服务商要求使用应用专用密码或授权码。账号政策不允许时，使用系统 Mail；不能用普通密码绕过 OAuth。</p>
+    </div>
     <div class="settings-section">
       <h3 class="settings-section-h">📧 Email (IMAP/SMTP)</h3>
       <p class="settings-hint">
-        Uses Python stdlib (imaplib/smtplib) — no extra install needed.<br>
-        Requires an <strong>App Password</strong>, not your account password.<br>
-        Gmail: Google Account → Security → 2-Step Verification → App Passwords.<br>
-        iCloud: <a href="https://appleid.apple.com" target="_blank" rel="noopener">appleid.apple.com</a> → Sign-In &amp; Security → App-Specific Passwords.
+        选择服务商后按下方指引配置。测试只验证登录与邮箱文件夹访问，不会发送邮件。
       </p>
       ${_renderAccountTabBar(emailAccounts, currentEmailTab, "email")}
       <div class="settings-field">
@@ -338,6 +315,7 @@ export function renderIntegrationsTab() {
           ${EMAIL_PROVIDERS.map((p, i) => `<button class="chip-btn" data-email-preset="${i}">${p.label}</button>`).join("")}
         </div>
       </div>
+      <div id="email-auth-guide" class="integration-guide settings-hint" aria-live="polite"></div>
       <div class="settings-field">
         <label>${t("sint_acct_label")} <span class="settings-hint">${t("sint_optional")}</span></label>
         <input id="email-label" type="text" value="${escHtml(ea.label)}" placeholder="Work / Personal">
@@ -350,7 +328,7 @@ export function renderIntegrationsTab() {
         <input id="email-username" type="text" value="${escHtml(ea.username)}" placeholder="you@example.com">
       </div>
       <div class="settings-field">
-        <label>${t("sint_app_password")}</label>
+        <label id="email-credential-label">${t("sint_app_password")}</label>
         <input id="email-password" type="password" value="" placeholder="${pwdPlaceholder}">
       </div>
       <div class="settings-row">
@@ -391,11 +369,14 @@ export function renderIntegrationsTab() {
         ${t("sint_caldav_password_hint")}
       </p>
       <p class="settings-hint">
-        ${t("sint_google_calendar_oauth_hint")}
+        Google Calendar 不能使用 Gmail 应用密码连接 CalDAV；Mac 推荐使用上方本机日历入口。直接 OAuth 仅适用于发布方已配置的授权服务，或已有自己 OAuth 应用的高级用户。
         <a href="https://developers.google.com/workspace/calendar/caldav/v2/guide" target="_blank" rel="noopener">${t("sint_google_calendar_docs")}</a>
       </p>
-      <button id="btn-google-calendar-settings" class="chip-btn">${t("sint_google_calendar_connect")}</button>
+      <button id="btn-google-calendar-settings" class="chip-btn">Google OAuth 高级配置</button>
       ${_renderAccountTabBar(calendarAccounts, currentCalendarTab, "calendar")}
+      ${calendarAccounts.length ? '' : '<p class="settings-hint">暂无日历源，点击 ＋ 添加。保存后移除旧源及已同步的日程副本。</p>'}
+      <fieldset style="border:0;padding:0;margin:0;min-width:0" ${calendarAccounts.length ? '' : 'hidden disabled'}>
+      <p class="settings-hint">关闭或删除来源并保存后，会清理该来源已同步到 HushClaw 的全部日程；不影响外部日历和手动创建的行程。重新启用后会重新同步。</p>
       <div class="settings-field">
         <label>${t("sint_quickfill")}</label>
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
@@ -412,6 +393,7 @@ export function renderIntegrationsTab() {
       <div class="settings-field">
         <label>${t("sint_caldav_url")}</label>
         <input id="calendar-url" type="text" value="${escHtml(ca.url)}" placeholder="https://caldav.icloud.com">
+        <div id="calendar-auth-guide" class="settings-hint" aria-live="polite"></div>
       </div>
       <div class="settings-field">
         <label>${t("sint_username")}</label>
@@ -430,17 +412,39 @@ export function renderIntegrationsTab() {
         <span id="test-calendar-status" style="font-size:12px"></span>
       </div>
       <div id="test-calendar-log" style="display:none;margin-top:8px;padding:8px;background:var(--bg-code,#1a1a2e);border-radius:6px;font-size:11px;font-family:monospace;white-space:pre-wrap;max-height:120px;overflow-y:auto"></div>
+      </fieldset>
     </div>
 
     <div class="settings-section">
       <h3 class="settings-section-h">🍎 macOS Native (Mail.app &amp; Calendar.app)</h3>
       <p class="settings-hint">
-        Zero configuration — uses your system's logged-in accounts automatically.<br>
-        Available only on macOS. Tools: <code>macos_list_emails</code>, <code>macos_send_email</code>,
-        <code>macos_list_calendars</code>, <code>macos_list_events</code>, <code>macos_create_calendar_event</code>.
+        仅 macOS 可用。系统先完成服务商登录，本机日历仍需你明确授权并选择来源。<br>
+        系统 Mail 的邮件工具（如 <code>macos_list_emails</code>）需要另行加入工具启用列表，并批准系统自动化权限；不会因选择服务商而自动启用。
       </p>
     </div>
   `;
+
+  const updateEmailGuide = () => {
+    const guide = emailGuide(document.getElementById("email-imap-host").value);
+    document.getElementById("email-auth-guide").innerHTML = `${escHtml(guide.hint)}
+      ${guide.action ? `<a href="${escHtml(guide.action)}" target="_blank" rel="noopener noreferrer">${escHtml(guide.actionLabel)}</a>` : ''}
+      ${guide.url ? `<a href="${escHtml(guide.url)}" target="_blank" rel="noopener noreferrer">官方说明 ↗</a>` : ''}`;
+    document.getElementById("email-credential-label").textContent = guide.credential;
+    document.getElementById("email-password").disabled = Boolean(guide.blocked);
+    document.getElementById("btn-test-email").disabled = Boolean(guide.blocked);
+  };
+  const updateCalendarGuide = () => {
+    document.getElementById("calendar-auth-guide").textContent = calendarGuide(document.getElementById("calendar-url").value);
+  };
+  updateEmailGuide();
+  updateCalendarGuide();
+  document.getElementById("email-imap-host").addEventListener("input", updateEmailGuide);
+  document.getElementById("calendar-url").addEventListener("input", updateCalendarGuide);
+  document.getElementById("btn-native-calendar-settings").addEventListener("click", () => {
+    syncFormToState();
+    closeWizard();
+    if (!wizard.open) openCalendarSourceSettings();
+  });
 
   // ── Email account tab events ──
   document.querySelectorAll("[data-email-tab]").forEach((btn) => {
@@ -478,10 +482,14 @@ export function renderIntegrationsTab() {
       document.getElementById("email-imap-port").value = p.imap_port;
       document.getElementById("email-smtp-host").value = p.smtp_host;
       document.getElementById("email-smtp-port").value = p.smtp_port;
+      document.getElementById("email-password").value = "";
+      document.getElementById("email-password").placeholder = p.credential;
+      updateEmailGuide();
     });
   });
 
   document.getElementById("btn-test-email")?.addEventListener("click", () => {
+    _syncEmailFormToAccount();
     const log = document.getElementById("test-email-log");
     const status = document.getElementById("test-email-status");
     log.textContent = "";
@@ -490,12 +498,14 @@ export function renderIntegrationsTab() {
     status.style.color = "";
     send({
       type: "test_email",
+      account: currentEmailTab,
+      mailbox: document.getElementById("email-mailbox")?.value || "INBOX",
       imap_host: document.getElementById("email-imap-host")?.value || "",
       imap_port: document.getElementById("email-imap-port")?.value || 993,
       smtp_host: document.getElementById("email-smtp-host")?.value || "",
       smtp_port: document.getElementById("email-smtp-port")?.value || 587,
       username:  document.getElementById("email-username")?.value  || "",
-      password:  document.getElementById("email-password")?.value  || "",
+      password:  emailAccounts[currentEmailTab]?.password || "",
     });
   });
 
@@ -521,15 +531,37 @@ export function renderIntegrationsTab() {
   });
 
   document.querySelectorAll("[data-calendar-del]").forEach((el) => {
-    el.addEventListener("click", (ev) => {
+    el.addEventListener("click", async (ev) => {
       ev.stopPropagation();
-      if (calendarAccounts.length <= 1) return;
       _syncCalendarFormToAccount();
       const idx = parseInt(el.dataset.calendarDel);
+      const account = calendarAccounts[idx];
+      if (!account || !await openConfirm({
+        title: '删除日历源？',
+        message: `保存设置后，将删除“${account.label || account.username || '此日历源'}”的配置及全部已同步日程副本。外部原始日历和手动创建的行程不受影响。`,
+        confirmText: '删除来源', cancelText: '取消', dangerConfirm: true,
+      })) return;
+      if (calendarAccounts[idx] !== account) return;
       calendarAccounts.splice(idx, 1);
       setCurrentCalendarTab(Math.max(0, Math.min(currentCalendarTab, calendarAccounts.length - 1)));
       renderIntegrationsTab();
     });
+  });
+
+  document.getElementById("calendar-enabled")?.addEventListener("change", async (ev) => {
+    const input = ev.target;
+    if (input.checked) return;
+    // Keep the old value until confirmed, so Save cannot race the dialog.
+    input.checked = true;
+    const ok = await openConfirm({
+      title: '关闭日历同步？',
+      message: '保存设置后，将停止此来源的同步，并清理它已同步到 HushClaw 的全部日程副本。外部原始日历不受影响，重新启用后会重新同步。',
+      confirmText: '关闭并清理', cancelText: '取消', dangerConfirm: true,
+    });
+    if (ok && input.isConnected) {
+      input.checked = false;
+      _syncCalendarFormToAccount();
+    }
   });
 
   document.querySelectorAll("[data-cal-preset]").forEach((btn) => {
@@ -537,10 +569,13 @@ export function renderIntegrationsTab() {
       const p = CALDAV_PROVIDERS[parseInt(btn.dataset.calPreset)];
       if (!p) return;
       document.getElementById("calendar-url").value = p.url;
+      document.getElementById("calendar-password").value = "";
+      updateCalendarGuide();
     });
   });
 
   document.getElementById("btn-test-calendar")?.addEventListener("click", () => {
+    _syncCalendarFormToAccount();
     const log = document.getElementById("test-calendar-log");
     const status = document.getElementById("test-calendar-status");
     log.textContent = "";
@@ -549,9 +584,10 @@ export function renderIntegrationsTab() {
     status.style.color = "";
     send({
       type: "test_calendar",
+      account: currentCalendarTab,
       url:           document.getElementById("calendar-url")?.value      || "",
       username:      document.getElementById("calendar-username")?.value  || "",
-      password:      document.getElementById("calendar-password")?.value  || "",
+      password:      calendarAccounts[currentCalendarTab]?.password || "",
       calendar_name: document.getElementById("calendar-name")?.value      || "",
     });
   });
@@ -573,4 +609,5 @@ export function handleTestIntegrationResult(data) {
   if (!status) return;
   status.textContent = data.ok ? "✓ Connected" : "✗ Failed";
   status.style.color = data.ok ? "var(--color-success, #4caf50)" : "var(--color-error, #f44336)";
+  if (!data.ok && data.message) handleTestIntegrationStep({ target: data.target, ok: false, message: data.message });
 }

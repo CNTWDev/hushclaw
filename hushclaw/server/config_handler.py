@@ -13,6 +13,7 @@ import time
 
 from hushclaw.config.writer import dict_to_toml_str
 from hushclaw.connections.config import connections_raw_to_legacy, legacy_to_connections_raw
+from hushclaw.util.mail_auth import account_identity
 
 log = logging.getLogger("hushclaw.server.config")
 
@@ -170,11 +171,12 @@ async def handle_save_config(ws, data: dict, apply_config, credential_service=No
             # the frontend omits it (passwords are never echoed back to the browser).
             old_list = _normalize_account_entries(existing.get(list_key))
             cleaned = []
-            for i, acct in enumerate(val):
+            for acct in val:
                 if isinstance(acct, dict):
-                    clean_acct = {k: (v.strip() if isinstance(v, str) else v) for k, v in acct.items()}
+                    clean_acct = {k: (v.strip() if isinstance(v, str) and k != 'password' else v) for k, v in acct.items()}
                     if not clean_acct.get("password"):
-                        old = old_list[i] if i < len(old_list) and isinstance(old_list[i], dict) else {}
+                        matches = [a for a in old_list if account_identity(a, list_key) == account_identity(clean_acct, list_key)]
+                        old = matches[0] if len(matches) == 1 else {}
                         old_pwd = old.get("password", "")
                         if old_pwd:
                             clean_acct["password"] = old_pwd
@@ -183,15 +185,12 @@ async def handle_save_config(ws, data: dict, apply_config, credential_service=No
         elif isinstance(val, dict):
             # Legacy single-account payload — wrap or merge into first slot
             old_list = _normalize_account_entries(existing.get(list_key))
-            cleaned = {k: (v.strip() if isinstance(v, str) else v) for k, v in val.items()}
-            if not cleaned.get("password") and old_list:
-                old_pwd = old_list[0].get("password", "")
-                if old_pwd:
-                    cleaned["password"] = old_pwd
-            if old_list:
-                existing[list_key] = [{**old_list[0], **{k: v for k, v in cleaned.items() if v != ""}}]
-            else:
-                existing[list_key] = [cleaned]
+            cleaned = {k: (v.strip() if isinstance(v, str) and k != 'password' else v) for k, v in val.items()}
+            old = old_list[0] if old_list else {}
+            merged = {**old, **cleaned}
+            if not cleaned.get("password"):
+                merged["password"] = old.get("password", "") if account_identity(old, list_key) == account_identity(merged, list_key) else ""
+            existing[list_key] = [merged]
 
     # Agent section: workspace_dir and cheap_model (save separately to allow clearing)
     if "agent" in incoming and isinstance(incoming["agent"], dict):

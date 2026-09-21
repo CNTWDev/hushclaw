@@ -63,7 +63,7 @@ class CalDAVSyncService:
 
     async def sync(self) -> int:
         """Pull CalDAV events and upsert into local DB. Returns inserted/updated count."""
-        if not self._ready_to_sync():
+        if self._stop_event.is_set() or not self._ready_to_sync():
             return 0
 
         cfg = self._config
@@ -72,6 +72,8 @@ class CalDAVSyncService:
 
         try:
             count = await asyncio.to_thread(self._fetch_and_upsert, cfg)
+            if self._stop_event.is_set():
+                return 0
             self._last_sync = self._now_ts()
             self._last_failure = 0.0
             self._failure_count = 0
@@ -81,6 +83,8 @@ class CalDAVSyncService:
             log.info("[caldav] sync complete: %d events inserted/updated", count)
             return count
         except Exception as exc:
+            if self._stop_event.is_set():
+                return 0
             self._last_failure = self._now_ts()
             self._failure_count += 1
             self._last_error = str(exc) or type(exc).__name__
@@ -128,7 +132,14 @@ class CalDAVSyncService:
                 await self._task
             except asyncio.CancelledError:
                 pass
+        # Cancelling asyncio.to_thread does not stop its worker. Drain it before
+        # the manager clears a snapshot or starts a replacement service.
+        await asyncio.to_thread(self._wait_for_worker)
         log.info("[caldav] sync service stopped")
+
+    def _wait_for_worker(self):
+        with self._sync_lock:
+            pass
 
     # ── Internal loop ─────────────────────────────────────────────────────────
 
@@ -214,6 +225,8 @@ class CalDAVSyncService:
                 return 0
             log.info("[caldav] sync lock acquired")
             count, seen_ids = self._do_sync(cfg)
+            if self._stop_event.is_set():
+                return 0
             # Prune inside the lock so a concurrent clear+resync cannot race with this prune.
             pruned = self._memory.prune_stale_caldav_events(seen_ids)
             if pruned:
@@ -260,6 +273,8 @@ class CalDAVSyncService:
         seen_ids: set[str] = set()
 
         for calendar in calendars:
+            if self._stop_event.is_set():
+                return count, seen_ids
             cal_name = getattr(calendar, "name", "?")
             cal_key = self._calendar_key(calendar, cal_name)
             state = self._memory.get_caldav_collection_state(cal_key) or {}

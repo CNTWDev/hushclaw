@@ -53,7 +53,7 @@ async def test_authorization_is_explicit(service):
 
 
 @pytest.mark.asyncio
-async def test_selection_validates_before_saving_and_pause_retains_cache(service):
+async def test_selection_validates_before_saving_and_disable_clears_cache(service):
     service.reader.call.return_value = {'calendars': [{'id': 'work'}], 'permission': 'authorized'}
     for ids in ([], ['unavailable']):
         with pytest.raises(ValueError):
@@ -65,9 +65,14 @@ async def test_selection_validates_before_saving_and_pause_retains_cache(service
     assert result['calendar_ids'] == ['work']
     service.sync.assert_awaited_once()
     service.start.assert_awaited_once()
+    local = service._memory.add_calendar_event(title='Local', start_time='2026-09-20', end_time='2026-09-21')
+    cached = service._memory.add_calendar_event(title='Imported', start_time='2026-09-20', end_time='2026-09-21', source='macos')
     result = await service.select(False, ['work'])
     assert not result['enabled']
     assert result['calendar_ids'] == ['work']
+    assert service._memory.get_calendar_event(cached['event_id']) is None
+    assert service._memory.get_calendar_event(local['event_id']) is not None
+    assert service._stop_event.is_set()
 
 
 @pytest.mark.asyncio

@@ -3822,6 +3822,28 @@ class MemoryStore:
         self.conn.commit()
         return cur.rowcount
 
+    def clear_synced_calendar_source(self, source: str, sync_key: str = "") -> int:
+        """Forget one imported snapshot and its sync cursor, never local events.
+
+        Caller must stop and drain the owning sync service before clearing.
+        CalDAV currently has one effective account (Config.calendar); Google
+        and native calendars each own a separate snapshot.
+        """
+        if source not in {"caldav", "google", "macos"}:
+            raise ValueError("Unsupported synced calendar source")
+        from contextlib import closing
+        from hushclaw.memory.encryption import connect_database
+        conn, _, _ = connect_database(self.data_dir, mode=self.database_encryption)
+        with closing(conn), conn:
+            conn.execute("PRAGMA busy_timeout=5000")
+            conn.execute("BEGIN IMMEDIATE")
+            count = conn.execute("DELETE FROM calendar_events WHERE source=?", (source,)).rowcount
+            if source == "caldav":
+                conn.execute("DELETE FROM caldav_collection_state")
+            if sync_key:
+                conn.execute("DELETE FROM caldav_sync_state WHERE sync_key=?", (sync_key,))
+            return count
+
     def prune_stale_caldav_events(self, kept_ids: set) -> int:
         """Delete source='caldav' rows whose event_id is not in kept_ids.
 

@@ -238,7 +238,8 @@ export const connectors = {
 };
 
 export const appConnectors = {
-  broker_base_url: "https://bus-ie.aibotplatform.com/hushclaw/app-connectors/oauth",
+  broker_base_url: "",
+  managed_oauth_available: false,
   github: {
     enabled: false,
     auth_mode: "managed",
@@ -273,8 +274,6 @@ export const appConnectors = {
     refresh_token_ref: "app_connectors.google_workspace.refresh_token",
     refresh_token_set: false,
     scopes: [
-      "https://www.googleapis.com/auth/drive.readonly",
-      "https://www.googleapis.com/auth/gmail.readonly",
       "https://www.googleapis.com/auth/calendar.readonly",
     ],
     allow_actions: false,

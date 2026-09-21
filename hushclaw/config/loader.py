@@ -327,6 +327,7 @@ def _dict_to_config(raw: dict) -> Config:
 
     app_conn_raw = raw.get("app_connectors", {})
     app_connectors = AppConnectorsConfig(
+        broker_base_url=str(app_conn_raw.get("broker_base_url") or "").strip(),
         github=make(GitHubAppConnectorConfig, app_conn_raw.get("github", {})),
         google_workspace=make(GoogleWorkspaceAppConnectorConfig, app_conn_raw.get("google_workspace", {})),
         notion=make(NotionAppConnectorConfig, app_conn_raw.get("notion", {})),

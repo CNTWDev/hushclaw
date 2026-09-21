@@ -8,12 +8,13 @@
 import {
   state, els, escHtml,
   isSessionRunning, setCurrentSessionId, clearCurrentSessionId, getCurrentSessionId, debugUiLifecycle,
+  setWorkbenchPanelVisible,
 } from "./state.js";
 import { setMarkdownContent } from "./markdown.js";
 import { refreshChatStats } from "./stats.js";
 
 import {
-  resetActiveRound, finalizeActiveRound, renderToolResult,
+  resetActiveRound, finalizeActiveRound, isDevMode,
 } from "./chat/tools.js";
 import { addCopyActions } from "./chat/export.js";
 import { attachUnderstanding } from "./chat/understanding.js";
@@ -1010,6 +1011,14 @@ export function insertThinkingMsg(startTime = Date.now()) {
     startedAt: startTime,
   });
   bubbleEl.replaceChildren(activity);
+  const details = document.createElement("button");
+  details.type = "button";
+  details.className = "chat-progress-details";
+  details.textContent = "执行详情";
+  details.setAttribute("aria-controls", "runtime-monitor");
+  details.hidden = !isDevMode();
+  details.addEventListener("click", () => setWorkbenchPanelVisible("runtime", true));
+  bubbleEl.append(details);
   bubbleEl.classList.add("thinking-bubble");
   els.messages.appendChild(msgEl);
   _ensureMessagesBottomSentinel();
@@ -1028,17 +1037,21 @@ function _renderThinkingStatus() {
   if (!bubbleEl) return;
   const sec = Math.max(0, Math.floor((Date.now() - (state._thinkingStart || Date.now())) / 1000));
   const activity = bubbleEl.querySelector(".ai-activity");
+  const details = bubbleEl.querySelector(".chat-progress-details");
+  if (details) details.hidden = !isDevMode();
   const detail = thinkingActivityDetail(
     state._thinkingStatus || "正在准备请求…", state._thinkingPhase,
     state._thinkingStageStart || state._thinkingStart,
   );
   if (activity?.updateActivity) {
     activity.updateActivity({
-      label: "Thinking",
+      label: detail,
       detail,
       state: AI_STATES.RUNNING,
-      startedAt: state._thinkingStageStart || state._thinkingStart || Date.now(),
+      startedAt: state._thinkingStart || Date.now(),
     });
+    // Short work needs only a status; long work keeps one cumulative clock.
+    activity.querySelector(".ai-activity-elapsed").hidden = sec < 10;
     return;
   }
   const copy = bubbleEl.querySelector(".thinking-copy");
@@ -1192,14 +1205,17 @@ function _renderOneTurn(t, parent = els.messages) {
     addCopyActions(msgEl, bubbleEl, contentEl, ts);
     attachUnderstanding(msgEl);
     parent.appendChild(msgEl);
-  } else if (t.role === "tool") {
-    const el = document.createElement("div");
-    renderToolResult(el, t.tool_name || "tool", t.content || "");
-    parent.appendChild(el);
   }
   if (parent === els.messages) {
     _ensureMessagesBottomSentinel();
   }
+}
+
+function _conversationTurns(turns) {
+  // Filter before windowing: a tail full of tool results must not leave an
+  // empty viewport. This is presentation-only; stored/model history is intact.
+  // Execution details belong in Runtime/Logs; generated files remain in Files.
+  return Array.isArray(turns) ? turns.filter(turn => turn && turn.role !== "tool") : [];
 }
 
 export async function renderSessionHistory(session_id, turns, summary = "", lineage = []) {
@@ -1207,7 +1223,7 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
   const renderNonce = ++_sessionHistoryRenderNonce;
   const keepInProgress = isSessionRunning(session_id);
   const renderStart = performance.now();
-  const turnList = Array.isArray(turns) ? turns : [];
+  const turnList = _conversationTurns(turns);
   debugUiLifecycle("render_session_history", {
     session_id,
     running: keepInProgress,

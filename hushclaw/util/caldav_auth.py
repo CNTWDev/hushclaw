@@ -23,7 +23,8 @@ def validate_caldav_password_auth(url: str) -> None:
             "are not supported by Google's CalDAV API. The legacy "
             "www.google.com/calendar/dav endpoint is deprecated. "
             "This CalDAV integration only supports username/password authentication; "
-            "disable this old Google CalDAV account and open Set up Google Calendar (OAuth) "
-            "in Settings > Integrations. Enable calendar sync in Google Workspace, "
-            "save, and complete Google authorization. Then use Calendar > Sync."
+            "Mac 用户无需开发者 ID：在系统互联网账户登录 Google，再进入 HushClaw 日历 → 日历来源授权读取本机日历。"
+            "应用内 OAuth 必须由发布方配置真实的已注册应用或授权服务；不能使用邮箱应用密码代替。"
         )
+    if parsed.scheme != 'https' or not host or parsed.username or parsed.password:
+        raise ValueError('CalDAV 必须使用不含嵌入凭据的 HTTPS 服务地址，不会通过明文 HTTP 发送密码。')

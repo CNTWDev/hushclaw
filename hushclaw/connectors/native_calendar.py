@@ -102,14 +102,6 @@ class NativeCalendarSyncService(CalDAVSyncService):
         if self._ready_to_sync():
             await super().start()
 
-    async def stop(self):
-        await super().stop()
-        await asyncio.to_thread(self._wait_for_worker)
-
-    def _wait_for_worker(self):
-        with self._sync_lock:
-            pass
-
     async def status(self, authorize=False):
         if authorize:
             await asyncio.to_thread(self.reader.build)
@@ -132,10 +124,14 @@ class NativeCalendarSyncService(CalDAVSyncService):
             self._memory.conn.execute("INSERT INTO calendar_sources(source_id,config_json) VALUES('macos',?) ON CONFLICT(source_id) DO UPDATE SET config_json=excluded.config_json",
                 (json.dumps({'enabled':enabled,'calendar_ids':list(dict.fromkeys(calendar_ids))}),))
             self._memory.conn.commit()
-            self._stop_event.clear()
             if enabled:
+                self._stop_event.clear()
                 await self.sync()
                 await self.start()
+            else:
+                self._memory.clear_synced_calendar_source('macos', self._sync_key)
+                self._last_sync = 0.0
+                self._last_error = ''
             return await self.status()
 
     def _fetch_and_upsert(self, cfg):

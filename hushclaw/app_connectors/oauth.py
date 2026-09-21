@@ -32,6 +32,21 @@ class OAuthError(RuntimeError):
     pass
 
 
+def managed_broker_url(config) -> str:
+    url = str(getattr(config.app_connectors, 'broker_base_url', '') or '').strip().rstrip('/')
+    # The old shipped placeholder has no OAuth service. Do not send it state
+    # or tokens merely because an older config preserved that default.
+    if url == 'https://bus-ie.aibotplatform.com/hushclaw/app-connectors/oauth':
+        return ''
+    try:
+        parsed = urllib.parse.urlsplit(url)
+    except ValueError:
+        return ''
+    if parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password:
+        return ''
+    return url
+
+
 def _connector_attr(connector_id: str) -> str:
     aliases = {"google-workspace": "google_workspace"}
     return aliases.get(connector_id, connector_id)
@@ -138,9 +153,9 @@ def _token_updates(connector_id: str, payload: dict, cfg, secret_store) -> dict:
 
 
 def _begin_managed_oauth(connector_id: str, config, secret_store, base_url: str, cfg) -> OAuthStart:
-    broker_base = str(getattr(config.app_connectors, "broker_base_url", "") or "").strip().rstrip("/")
+    broker_base = managed_broker_url(config)
     if not broker_base:
-        raise OAuthError("HushClaw OAuth broker is not configured.")
+        raise OAuthError("未配置发布方 OAuth 服务，不能直接一键授权。Mac 用户可在系统互联网账户登录，再使用 HushClaw 本机日历；无需申请开发者 ID。其他部署须由发布方提供已注册的 OAuth 应用。")
     redirect_uri = _callback_url(base_url, connector_id)
     state = _secrets.token_urlsafe(32)
     secret_store.set(_state_ref(state), json.dumps({
@@ -166,7 +181,7 @@ def _begin_managed_oauth(connector_id: str, config, secret_store, base_url: str,
 
 
 def _complete_managed_oauth(connector_id: str, state: str, code: str, config, secret_store, cfg) -> dict:
-    broker_base = str(getattr(config.app_connectors, "broker_base_url", "") or "").strip().rstrip("/")
+    broker_base = managed_broker_url(config)
     if not broker_base:
         raise OAuthError("HushClaw OAuth broker is not configured.")
     payload = _json_request(f"{broker_base}/{connector_id}/handoff/exchange", method="POST", data={

@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from hushclaw.config.schema import CalendarConfig
+from hushclaw.config.schema import CalendarConfig, Config
 from hushclaw.server.integration_handler import handle_test_calendar
 from hushclaw.util.caldav_auth import validate_caldav_password_auth
 
@@ -42,7 +42,7 @@ async def test_connection_test_rejects_google_without_network(use_saved_config):
         url="https://www.google.com/calendar/dav",
         username="user@gmail.com", password="secret-password",
     )
-    gateway = SimpleNamespace(base_agent=SimpleNamespace(config=SimpleNamespace(calendar=calendar)))
+    gateway = SimpleNamespace(base_agent=SimpleNamespace(config=Config(calendars=[calendar])))
     ws = SimpleNamespace(send=AsyncMock())
     caldav = MagicMock()
     data = {} if use_saved_config else vars(calendar)
@@ -59,13 +59,14 @@ async def test_connection_test_rejects_google_without_network(use_saved_config):
 @pytest.mark.asyncio
 async def test_other_provider_can_still_connect():
     calendar = CalendarConfig(url="https://caldav.icloud.com", username="user", password="app-password")
-    gateway = SimpleNamespace(base_agent=SimpleNamespace(config=SimpleNamespace(calendar=calendar)))
+    gateway = SimpleNamespace(base_agent=SimpleNamespace(config=Config(calendars=[calendar])))
     ws = SimpleNamespace(send=AsyncMock())
     caldav = MagicMock()
     caldav.DAVClient.return_value.principal.return_value.calendars.return_value = [SimpleNamespace(name="Personal")]
     with patch.dict("sys.modules", {"caldav": caldav}):
         await handle_test_calendar(ws, {}, gateway)
-    caldav.DAVClient.assert_called_once_with(url=calendar.url, username="user", password="app-password")
+    caldav.DAVClient.assert_called_once_with(url=calendar.url, username="user", password="app-password", timeout=20)
+    caldav.DAVClient.return_value.close.assert_called_once()
     assert json.loads(ws.send.call_args.args[0])["ok"] is True
 
 

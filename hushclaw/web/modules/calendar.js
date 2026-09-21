@@ -1,6 +1,6 @@
 /** My itinerary: rendering only; native sources and interval math stay separate. */
 import { send, calendarCfg, state } from './state.js';
-import { dayKey, shiftDay, wallInput, segments, layoutIntervals, gaps, conflictCount, clockLabel } from './calendar_math.js';
+import { dayKey, shiftDay, wallInput, segments, timedEventLayout, gaps, conflictCount, clockLabel } from './calendar_math.js';
 import { eventDetails, eventEditor, closeEventEditor } from './calendar_forms.js';
 import { openCalendarSources, receiveNativeStatus, resetNativeRequests } from './calendar_sources.js';
 export const onNativeCalendarStatus = receiveNativeStatus;
@@ -22,6 +22,12 @@ const data = {
   hidden: new Set(),
   query: ''
 };
+export function openCalendarSourceSettings() {
+  openCalendarSources(data, () => {
+    remember();
+    render();
+  });
+}
 let serial = 0,
   requestId = '',
   syncTimer = null;
@@ -141,9 +147,9 @@ function timeline(host, range, events, current) {
   for (const d of range) {
     html += `<div class="it-day-column ${d === current ? 'is-today' : ''}">`;
     for (let h = 0; h < 24; h++) html += `<button class="it-slot" data-new="${d}T${String(h).padStart(2, '0')}:00" aria-label="${d} ${h}:00 新建行程" style="top:${h * 52}px"></button>`;
-    for (const r of layoutIntervals(segments(events, d, zone()))) {
-      const label = `${r.event.title}，${clockLabel(r.start)}–${clockLabel(r.end)}${r.columns > 1 ? '，时间冲突' : ''}`;
-      html += `<button class="it-event it-timed" data-event="${esc(r.event.event_id)}" data-source="${esc(r.event.source || 'local')}" aria-label="${esc(label)}" title="${esc(label)}" style="top:${r.start / 60 * 52}px;height:${Math.max(22, (r.end - r.start) / 60 * 52 - 2)}px;left:calc(${r.column / r.columns * 100}% + 3px);width:calc(${100 / r.columns}% - 6px)"><strong>${r.continued ? '↳ ' : ''}${esc(r.event.title)}</strong><small>${clockLabel(r.start)}–${clockLabel(r.end)}${r.columns > 1 ? ' · 冲突' : ''}</small>${range.length === 1 && r.end - r.start >= 60 ? `<small>${esc(r.event.location || sourceName(r.event))}</small>` : ''}</button>`;
+    for (const r of timedEventLayout(segments(events, d, zone()))) {
+      const label = `${r.event.title}，${clockLabel(r.start)}–${clockLabel(r.end)}${r.conflict ? '，时间冲突' : ''}`;
+      html += `<button class="it-event it-timed" data-density="${r.density}" data-event="${esc(r.event.event_id)}" data-source="${esc(r.event.source || 'local')}" aria-label="${esc(label)}" title="${esc(label)}" style="top:${r.top}px;height:${r.height}px;left:calc(${r.column / r.columns * 100}% + 3px);width:calc(${100 / r.columns}% - 6px)"><strong>${r.continued ? '↳ ' : ''}${esc(r.event.title)}</strong>${r.density !== 'compact' ? `<small>${clockLabel(r.start)}–${clockLabel(r.end)}${r.conflict ? ' · 冲突' : ''}</small>` : ''}${range.length === 1 && r.showLocation ? `<small>${esc(r.event.location || sourceName(r.event))}</small>` : ''}</button>`;
     }
     if (d === current) {
       const text = wallInput(new Date().toISOString(), zone()).slice(11),
@@ -228,10 +234,7 @@ export function initCalendar() {
     render();
   });
   $('cal-new-btn')?.addEventListener('click', () => eventEditor(null, data.date, zone()));
-  $('cal-sources-btn')?.addEventListener('click', () => openCalendarSources(data, () => {
-    remember();
-    render();
-  }));
+  $('cal-sources-btn')?.addEventListener('click', openCalendarSourceSettings);
   $('cal-sync-btn')?.addEventListener('click', () => {
     $('cal-sync-btn').disabled = true;
     $('cal-sync-status').textContent = '正在刷新…';

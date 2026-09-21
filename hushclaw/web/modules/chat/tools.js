@@ -5,21 +5,15 @@
  * No imports from ../chat.js — avoids circular dependency.
  */
 
-import { state, els, escHtml } from "../state.js";
+import { escHtml } from "../state.js";
 import { setMarkdownContent } from "../markdown.js";
 import { resolveFileUrl } from "../http.js";
 import { markGeneratedArtifactsSeen } from "../panels/files.js";
-import { AI_STATES, createProcessDisclosure } from "../ui/ai-primitives.js";
-
-// ── Private scroll/thinking helpers (identical to chat.js, inlined to avoid circularity) ──
-function _scrollToBottom() { els.messages.scrollTop = els.messages.scrollHeight; }
-function _pinThinkingMsgToBottom() {
-  if (state._thinkingEl) els.messages.appendChild(state._thinkingEl);
-}
+import { AI_STATES } from "../ui/ai-primitives.js";
 
 // ── Developer mode ─────────────────────────────────────────────────────────
-// When dev mode is off (default) tool lines show friendly Chinese labels.
-// When on, they show raw tool names and result previews for debugging.
+// Chat always stays compact. Developer mode adds input/result previews to
+// Runtime and a shortcut from the active status, never standalone tool rows.
 export function isDevMode() {
   try { return localStorage.getItem("hushclaw.dev.mode") === "1"; } catch { return false; }
 }
@@ -119,14 +113,11 @@ export function insertToolBubble(_data) {
   // The primary conversation has exactly one in-progress surface. Raw tool
   // calls are recorded in the Runtime monitor by websocket.js, including in
   // developer mode, rather than inserted as a second chat row.
-  _pinThinkingMsgToBottom();
-  _scrollToBottom();
+  // Do not force-scroll: progress updates must not interrupt history reading.
 }
 
 export function updateToolBubble(_data) {
   // Completion details follow the same Runtime-monitor path as call details.
-  _pinThinkingMsgToBottom();
-  _scrollToBottom();
 }
 
 function _normalizeArtifacts(artifacts) {
@@ -355,19 +346,9 @@ export function finalizeActiveRound() {
 export function createToolRound(_round, _maxRounds) {
   finalizeActiveRound();
   _activeRoundEl = null;
-  _pinThinkingMsgToBottom();
-  _scrollToBottom();
 }
 
 export function insertRoundLine(round, maxRounds) {
-  const { root: wrap, body } = createProcessDisclosure({
-    index: `R${round}${maxRounds > 0 ? `/${maxRounds}` : ""}`,
-    label: "Processing…",
-    state: AI_STATES.RUNNING,
-    expanded: false,
-  });
-
-  els.messages.appendChild(wrap);
-  _activeRoundEl = body;
-  _scrollToBottom();
+  // Legacy entry point follows the same single-activity policy as live rounds.
+  createToolRound(round, maxRounds);
 }

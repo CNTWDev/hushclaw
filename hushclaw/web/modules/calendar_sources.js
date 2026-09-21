@@ -36,7 +36,7 @@ export function resetNativeRequests() {
   }
   pending.clear();
 }
-export async function openCalendarSources(data, onChange, authorize = false) {
+export async function openCalendarSources(data, onChange, authorize = false, configure = null) {
   let close, host, native;
   const node = (tag, text) => {
     const n = document.createElement(tag);
@@ -112,9 +112,17 @@ export async function openCalendarSources(data, onChange, authorize = false) {
       authorized: '已获得系统日历读取权限'
     };
     host.append(node('p', labels[native.permission] || native.permission));
-    host.append(node('p', native.enabled ? '每 5 分钟刷新，范围为过去 90 天到未来 275 天。' : '当前未启用自动读取。暂停后保留上次快照，可单独隐藏。'));
+    host.append(node('p', native.enabled ? '每 5 分钟刷新，范围为过去 90 天到未来 275 天。' : '当前未启用自动读取。关闭同步会清理已导入的副本，不影响系统日历。'));
     if (native.last_sync) host.append(node('p', '上次成功：' + new Date(native.last_sync * 1000).toLocaleString()));
     if (native.last_error) host.append(node('p', '上次错误：' + native.last_error));
+    if (native.enabled) host.append(button('关闭本机同步并清理', async () => {
+      const ok = await openConfirm({
+        title: '关闭本机日历同步？',
+        message: '将停止读取并清理所有本机日历导入的日程副本。不删除系统日历中的原始日程；重新启用后可重新同步。',
+        confirmText: '关闭并清理', cancelText: '取消', dangerConfirm: true,
+      });
+      openCalendarSources(data, onChange, false, ok ? {enabled:false, calendar_ids:native.calendar_ids || []} : null);
+    }));
     if (native.permission !== 'authorized') {
       host.append(button('授权读取本机日历', async () => {
         const ok = await openConfirm({
@@ -133,13 +141,11 @@ export async function openCalendarSources(data, onChange, authorize = false) {
       enabled: true,
       calendar_ids: [...selected]
     })));
-    if (native.enabled) host.append(button('暂停本机同步', () => operation('configure_native_calendar', {
-      enabled: false,
-      calendar_ids: [...selected]
-    })));
   }
   try {
-    native = await request(authorize ? 'authorize_native_calendar' : 'get_native_calendar_status');
+    native = configure
+      ? await request('configure_native_calendar', configure)
+      : await request(authorize ? 'authorize_native_calendar' : 'get_native_calendar_status');
     if (alive()) paint();
   } catch (error) {
     if (alive()) {

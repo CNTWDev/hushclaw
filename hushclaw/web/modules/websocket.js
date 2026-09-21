@@ -1292,6 +1292,10 @@ export function handleMessage(data) {
         send({ type: "list_scheduled_tasks" });
       }
       break;
+    case "calendar_sources_changed":
+      if (data.error) showToast(data.error, "err");
+      send({ type: "list_calendar_events" });
+      break;
     case "calendar_events":
       renderCalendarEvents(data.items || [], data);
       break;

@@ -277,13 +277,49 @@
 }
 
 .msg.ai.thinking-msg .bubble.thinking-bubble {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   width: fit-content;
+  max-width: 100%;
+  min-height: 32px;
   padding: 3px 0;
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
 }
+
+/* One aligned line replaces the old stack of completed tool notices.
+   It sizes to real content and disappears with the progress message. */
+.thinking-bubble .ai-activity {
+  min-width: 0;
+  max-width: 100%;
+  gap: 10px;
+}
+.thinking-bubble .ai-activity-copy { display: none; }
+.thinking-bubble .ai-activity-detail:not([hidden]) {
+  padding-left: 0;
+  border: 0;
+  color: var(--muted);
+}
+.thinking-bubble .ai-activity-line.is-outgoing { inset-inline-start: 0; }
+.thinking-bubble .ai-activity-mark { flex-shrink: 0; }
+.thinking-bubble .ai-activity-elapsed[hidden],
+.chat-progress-details[hidden] { display: none; }
+.chat-progress-details {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-size: var(--ui-type-meta);
+  cursor: pointer;
+}
+.chat-progress-details:hover { color: var(--text); background: var(--surface2); }
+.chat-progress-details:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .msg.ai .bubble,
 .msg.ai .bubble.markdown-body,

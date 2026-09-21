@@ -10,6 +10,7 @@ import {
 } from "../state.js";
 import { providerById } from "./providers.js";
 import { vox, voxReady } from "./voxnexus.js";
+import { syncIntegrationAccount } from "./integration-guides.js";
 
 // ── Save timer (exported so handlers.js can clear on reconnect) ─────────────
 let _wizardSaveTimer = null;
@@ -330,31 +331,10 @@ export function syncFormToState() {
   }
 
   if (document.getElementById("email-enabled")) {
-    const acct = emailAccounts[currentEmailTab];
-    if (acct) {
-      acct.label    = (document.getElementById("email-label")?.value || "").trim();
-      acct.enabled  = document.getElementById("email-enabled").checked;
-      acct.username = (document.getElementById("email-username")?.value || "").trim();
-      const epwd = (document.getElementById("email-password")?.value || "").trim();
-      if (epwd) acct.password = epwd;
-      acct.imap_host = (document.getElementById("email-imap-host")?.value || "").trim();
-      acct.imap_port = parseInt(document.getElementById("email-imap-port")?.value) || acct.imap_port;
-      acct.smtp_host = (document.getElementById("email-smtp-host")?.value || "").trim();
-      acct.smtp_port = parseInt(document.getElementById("email-smtp-port")?.value) || acct.smtp_port;
-      acct.mailbox   = (document.getElementById("email-mailbox")?.value || "INBOX").trim();
-    }
+    syncIntegrationAccount(emailAccounts[currentEmailTab], 'email');
   }
   if (document.getElementById("calendar-enabled")) {
-    const acct = calendarAccounts[currentCalendarTab];
-    if (acct) {
-      acct.label         = (document.getElementById("calendar-label")?.value     || "").trim();
-      acct.enabled       = document.getElementById("calendar-enabled").checked;
-      acct.url           = (document.getElementById("calendar-url")?.value      || "").trim();
-      acct.username      = (document.getElementById("calendar-username")?.value || "").trim();
-      const cpwd = (document.getElementById("calendar-password")?.value || "").trim();
-      if (cpwd) acct.password = cpwd;
-      acct.calendar_name = (document.getElementById("calendar-name")?.value     || "").trim();
-    }
+    syncIntegrationAccount(calendarAccounts[currentCalendarTab], 'calendar');
   }
   // sys-timezone lives in the System tab; read it whenever it's present.
   const tzVal = (document.getElementById("sys-timezone")?.value || "").trim();
@@ -629,7 +609,7 @@ export function saveSettings() {
       dingtalk: dtConfig, wecom: wcConfig, whatsapp: waConfig,
     },
     app_connectors: {
-      broker_base_url: appConnectors.broker_base_url || "https://bus-ie.aibotplatform.com/hushclaw/app-connectors/oauth",
+      broker_base_url: appConnectors.broker_base_url || "",
       github: ghConfig,
       google_workspace: gwConfig,
       notion: ntConfig,

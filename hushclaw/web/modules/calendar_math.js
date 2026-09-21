@@ -79,7 +79,7 @@ export function segments(events, key, zone) {
   }
   return rows.sort((a, b) => Number(b.allDay) - Number(a.allDay) || a.start - b.start || a.end - b.end);
 }
-export function layoutIntervals(rows) {
+export function layoutIntervals(rows, minDuration = 0) {
   const result = rows.filter(r => !r.allDay).map(r => ({
     ...r
   })).sort((a, b) => a.start - b.start || b.end - a.end);
@@ -98,13 +98,33 @@ export function layoutIntervals(rows) {
     }
     let col = ends.findIndex(end => end <= r.start);
     if (col < 0) col = ends.length;
-    ends[col] = r.end;
+    // Reserve the visible card footprint, not just its actual duration.
+    // Adjacent short events must not overlap after minimum-height expansion.
+    const visualEnd = Math.max(r.end, r.start + minDuration);
+    ends[col] = visualEnd;
     r.column = col;
     group.push(r);
-    groupEnd = Math.max(groupEnd, r.end);
+    groupEnd = Math.max(groupEnd, visualEnd);
   }
   finish();
   return result;
+}
+
+export function timedEventLayout(rows, pixelsPerHour = 52) {
+  const minHeight = 22, gap = 2;
+  return layoutIntervals(rows, (minHeight + gap) / pixelsPerHour * 60).map(r => {
+    const height = Math.max(minHeight, (r.end - r.start) / 60 * pixelsPerHour - gap);
+    return {
+      ...r,
+      top: r.start / 60 * pixelsPerHour,
+      height,
+      density: height < 40 ? 'compact' : height < 64 ? 'standard' : 'roomy',
+      showLocation: height >= 82,
+      // Visual lane separation alone does not mean a real scheduling conflict.
+      conflict: rows.some(other => other !== r && !other.allDay && other.event !== r.event
+        && r.start < other.end && other.start < r.end),
+    };
+  });
 }
 export function gaps(rows, from = 540, to = 1080) {
   if (rows.some(r => r.allDay)) return [];

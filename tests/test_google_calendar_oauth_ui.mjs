@@ -32,14 +32,14 @@ async function harness({ saveId = 'save-1' } = {}) {
   };
   const state = {
     appConnectors: { google_workspace: { enabled: true, auth_mode: 'custom', calendar_sync_enabled: true, scopes: [] } },
-    appConnectorsPanel: {}, connectionsView: { items: [] }, connectors: {}, wizard: {},
+    appConnectorsPanel: {}, connectionsView: { items: [{id:'google_workspace', name:'Google Workspace', kind:'app', manage_target:'panel', manage_id:'google_workspace', auth:'OAuth 2.0'}] }, connectors: {}, wizard: {},
     els: { wstatus: { textContent: 'Invalid configuration' } },
     escHtml: value => String(value ?? ''), send() {},
   };
   const imports = {
     '../state.js': state,
     '../settings/save.js': { syncFormToState() {}, saveSettings() { saved++; return saveId; } },
-    '../modal.js': { openDialog(options) { rendered = options.html; }, closeModal() {} },
+    '../modal.js': { openDialog(options) { rendered = options.html; }, closeModal() {}, openConfirm: async () => false },
     '../http.js': { withApiKey: (url, key) => url + '?api_key=' + key },
     '../settings/providers.js': { CHANNELS: [] },
     '../i18n.js': { t: key => key },
@@ -67,6 +67,7 @@ async function harness({ saveId = 'save-1' } = {}) {
 test('Google setup renders sync controls and enables OAuth after custom credentials are entered', async () => {
   const h = await harness();
   assert.match(h.rendered, /app-google-workspace-calendar-sync/);
+  assert.doesNotMatch(h.rendered, /undefined/);
   assert.match(h.rendered, /http:\/\/localhost:8765\/oauth\/app-connectors\/google_workspace\/callback/);
   const get = id => h.document.getElementById('app-google-workspace-' + id);
   get('auth-mode').value = 'custom';
@@ -90,6 +91,15 @@ test('OAuth starts only after its own successful config save', async () => {
   h.result({ save_client_id: 'save-1', ok: true });
   assert.deepEqual(popup.navigations, ['/oauth/app-connectors/google_workspace/start?api_key=local-key']);
   assert.equal(h.timers.size, 0);
+});
+
+test('switching to managed mode without a configured broker does not enable Connect', async () => {
+  const h = await harness();
+  const mode = h.document.getElementById('app-google-workspace-auth-mode');
+  mode.value = 'managed';
+  mode.dispatchEvent(new Event('input'));
+  assert.equal(h.document.getElementById('btn-oauth-app-google_workspace').disabled, true);
+  assert.match(h.rendered, /无需你申请开发者 ID/);
 });
 
 test('failed or invalid settings cannot start OAuth', async () => {

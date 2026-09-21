@@ -69,6 +69,7 @@ class ConfigMixin:
         wc  = c.wecom
         wa  = c.whatsapp
         app = cfg.app_connectors
+        from hushclaw.app_connectors.oauth import managed_broker_url
         gh  = app.github
         gw  = app.google_workspace
         nt  = app.notion
@@ -210,6 +211,7 @@ class ConfigMixin:
             "connections": build_connections_view(cfg, self._connectors.status(), secret_store),
             "app_connectors": {
                 "broker_base_url": app.broker_base_url,
+                "managed_oauth_available": bool(managed_broker_url(cfg)),
                 "github": {
                     "enabled": gh.enabled,
                     "auth_mode": gh.auth_mode,
@@ -655,6 +657,17 @@ class ConfigMixin:
             **result,
         }))
 
+    async def _reload_connectors_and_calendar(self, *args, **kwargs):
+        try:
+            await self._connectors.reload(*args, **kwargs)
+            await self._broadcast_json({"type": "calendar_sources_changed"})
+        except Exception:
+            log.exception("Connector reload or calendar cleanup failed")
+            await self._broadcast_json({
+                "type": "calendar_sources_changed",
+                "error": "日历来源更新未完成，请重试保存设置或查看日志。",
+            })
+
     def _apply_config(self) -> None:
         """Hot-reload provider and config on the running agent after a config save."""
         try:
@@ -692,7 +705,7 @@ class ConfigMixin:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
                     asyncio.create_task(
-                        self._connectors.reload(
+                        self._reload_connectors_and_calendar(
                             new_cfg.connectors,
                             self._gateway,
                             webhook_registry=self._webhook_handlers,

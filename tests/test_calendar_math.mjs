@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 const source = await readFile(new URL('../hushclaw/web/modules/calendar_math.js',import.meta.url),'utf8');
-const {dayKey,shiftDay,wallToISO,wallInput,segments,layoutIntervals,gaps,conflictCount}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+const {dayKey,shiftDay,wallToISO,wallInput,segments,layoutIntervals,timedEventLayout,gaps,conflictCount}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
 const event=(a,b,all_day=false)=>({event_id:a,start_time:a,end_time:b,all_day});
 
 test('wall-time conversion respects configured zone, not browser zone',()=>{
@@ -35,4 +35,33 @@ test('overlap layout assigns independent columns and resets after a group',()=>{
 test('DST transition days preserve next-midnight clipping',()=>{
   const row=segments([event('2026-03-08T08:00:00Z','2026-03-09T07:00:00Z')],'2026-03-08','America/Los_Angeles')[0];
   assert.equal(row.start,0);assert.equal(row.end,1440);
+});
+
+test('short cards only render content that fits their visible height',()=>{
+  const rows=[15,30,60,90,120].map((duration,i)=>({event:{event_id:String(i)},start:i*180,end:i*180+duration}));
+  const layout=timedEventLayout(rows);
+  assert.deepEqual(layout.map(r=>r.density),['compact','compact','standard','roomy','roomy']);
+  assert.deepEqual(layout.map(r=>r.showLocation),[false,false,false,false,true]);
+  assert.equal(layout[0].height,22);
+  assert.equal(layout[1].height,24);
+  for (const r of layout) {
+    const contentHeight=r.density==='compact'?20:r.density==='standard'?40:r.showLocation?76:60;
+    assert.ok(r.height>=contentHeight);
+  }
+});
+
+test('back-to-back short events reserve separate visual lanes without false conflicts',()=>{
+  const rows=[0,5,10,15,30,45,60].map((start,i)=>({event:{event_id:String(i)},start,end:start+5}));
+  const layout=timedEventLayout(rows);
+  assert.ok(layout.some(r=>r.columns>1));
+  assert.ok(layout.every(r=>!r.conflict));
+  for(let i=0;i<layout.length;i++)for(let j=i+1;j<layout.length;j++) {
+    const a=layout[i],b=layout[j];
+    if(a.column===b.column)assert.ok(a.top+a.height<=b.top);
+  }
+});
+
+test('actual overlapping appointments still indicate conflicts',()=>{
+  const layout=timedEventLayout([{event:{event_id:'a'},start:540,end:570},{event:{event_id:'b'},start:555,end:585}]);
+  assert.ok(layout.every(r=>r.conflict&&r.columns===2));
 });

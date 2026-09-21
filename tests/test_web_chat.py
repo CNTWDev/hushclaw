@@ -311,7 +311,8 @@ def test_ai_interaction_primitives_share_one_state_and_motion_contract():
         assert state in primitives_js
     assert 'element.dataset.aiState = state;' in primitives_js
     assert 'createAgentActivity({' in chat_js
-    assert 'createProcessDisclosure({' in tools_js
+    assert 'createProcessDisclosure({' not in tools_js
+    assert 'createToolRound(round, maxRounds);' in tools_js
     assert 'applyAiState(row, taskStatus' in tasks_js
     assert "--ai-motion-instant: 120ms;" in primitives_css
     assert "--ai-motion-reveal: 380ms;" in primitives_css

@@ -24,15 +24,13 @@ Single-account config ([email] section) is still supported for backward compatib
 from __future__ import annotations
 
 import email as _email_lib
-import imaplib
 import json
-import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.header import decode_header as _decode_header
 
 from hushclaw.tools.base import tool, ToolResult
-from hushclaw.util.ssl_context import make_ssl_context
+from hushclaw.util.mail_auth import imap_connection, smtp_connection
 
 
 def _get_email_config(cfg, account: int):
@@ -51,10 +49,7 @@ def _get_email_config(cfg, account: int):
 
 def _imap_conn(email_cfg):
     """Return a logged-in IMAP4_SSL connection from an EmailConfig."""
-    ctx = make_ssl_context()
-    conn = imaplib.IMAP4_SSL(email_cfg.imap_host, email_cfg.imap_port, ssl_context=ctx)
-    conn.login(email_cfg.username, email_cfg.password)
-    return conn
+    return imap_connection(email_cfg)
 
 
 def _decode_str(value: str | bytes) -> str:
@@ -217,10 +212,7 @@ def send_email(
         if cc:
             recipients += [addr.strip() for addr in cc.split(",")]
 
-        with smtplib.SMTP(email_cfg.smtp_host, email_cfg.smtp_port, timeout=30) as server:
-            if email_cfg.use_tls:
-                server.starttls(context=make_ssl_context())
-            server.login(email_cfg.username, email_cfg.password)
+        with smtp_connection(email_cfg) as server:
             server.send_message(msg, to_addrs=recipients)
 
         return ToolResult.ok(f"Email sent to {to}" + (f", cc {cc}" if cc else ""))
@@ -395,10 +387,7 @@ def reply_email(
         msg.attach(MIMEText(f"{body}\n\n{quoted}", "plain", "utf-8"))
 
         recipients = [addr.strip() for addr in orig_from.split(",")]
-        with smtplib.SMTP(email_cfg.smtp_host, email_cfg.smtp_port, timeout=30) as server:
-            if email_cfg.use_tls:
-                server.starttls(context=make_ssl_context())
-            server.login(email_cfg.username, email_cfg.password)
+        with smtp_connection(email_cfg) as server:
             server.send_message(msg, to_addrs=recipients)
         return ToolResult.ok(f"Reply sent to {orig_from}")
     except Exception as e:
@@ -492,10 +481,7 @@ def forward_email(
         msg.attach(MIMEText(full_body, "plain", "utf-8"))
 
         recipients = [addr.strip() for addr in to.split(",")]
-        with smtplib.SMTP(email_cfg.smtp_host, email_cfg.smtp_port, timeout=30) as server:
-            if email_cfg.use_tls:
-                server.starttls(context=make_ssl_context())
-            server.login(email_cfg.username, email_cfg.password)
+        with smtp_connection(email_cfg) as server:
             server.send_message(msg, to_addrs=recipients)
         return ToolResult.ok(f"Email forwarded to {to}")
     except Exception as e:

@@ -493,8 +493,6 @@ class GoogleWorkspaceAppConnectorConfig:
     access_token_ref: str = "app_connectors.google_workspace.access_token"
     refresh_token_ref: str = "app_connectors.google_workspace.refresh_token"
     scopes: list[str] = field(default_factory=lambda: [
-        "https://www.googleapis.com/auth/drive.readonly",
-        "https://www.googleapis.com/auth/gmail.readonly",
         "https://www.googleapis.com/auth/calendar.readonly",
     ])
     allow_actions: bool = False
@@ -601,7 +599,7 @@ class XAppConnectorConfig:
 
 @dataclass
 class AppConnectorsConfig:
-    broker_base_url: str = "https://bus-ie.aibotplatform.com/hushclaw/app-connectors/oauth"
+    broker_base_url: str = ""  # Optional publisher-operated OAuth service.
     github: GitHubAppConnectorConfig = field(default_factory=GitHubAppConnectorConfig)
     google_workspace: GoogleWorkspaceAppConnectorConfig = field(default_factory=GoogleWorkspaceAppConnectorConfig)
     notion: NotionAppConnectorConfig = field(default_factory=NotionAppConnectorConfig)

@@ -491,16 +491,25 @@
   gap: 1px;
 }
 .acct-tab-del {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  border: 0;
+  background: transparent;
   font-size: 9px;
   line-height: 1;
   padding: 1px 4px;
   border-radius: 50%;
   color: var(--sub);
   cursor: pointer;
-  opacity: 0;
+  opacity: .6;
   transition: opacity 0.1s, color 0.1s;
 }
 .acct-tab-wrap:hover .acct-tab-del { opacity: 1; }
+.acct-tab-del:focus-visible { opacity: 1; outline: 2px solid var(--accent); }
 .acct-tab-del:hover { color: var(--err, #f44336); }
 
 /* Wizard footer */
@@ -513,6 +522,14 @@
   flex-shrink: 0;
 }
 .wizard-footer button#wbtn-save { min-width: 76px; }
+.integration-guide {
+  padding: 10px 12px;
+  margin-block: 8px 12px;
+  background: var(--bg-hover, #f4f6f8);
+  border-radius: 8px;
+  line-height: 1.6;
+}
+.integration-guide a { display: inline-block; margin-inline-end: 10px; }
 
 /* VoxNexus account centre */
 .vox-profile-head { display: flex; align-items: center; gap: 14px; }

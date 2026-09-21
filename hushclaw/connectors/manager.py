@@ -1,6 +1,7 @@
 """ConnectorsManager — lifecycle manager for all enabled connectors."""
 from __future__ import annotations
 import sys
+import asyncio
 
 from hushclaw.connectors.base import Connector, log
 from hushclaw.config.schema import ConnectorsConfig
@@ -23,6 +24,9 @@ class ConnectorsManager:
         self._caldav_sync = None
         self._google_calendar_sync = None
         self._native_calendar_sync = None
+        self._reload_lock = asyncio.Lock()
+        self._calendar_state = self._calendar_source_state(calendar_config)
+        self._google_state = self._google_source_state(google_workspace_config)
         if sys.platform == 'darwin' and memory_store is not None:
             from hushclaw.connectors.native_calendar import NativeCalendarSyncService
             self._native_calendar_sync = NativeCalendarSyncService(memory_store)
@@ -100,6 +104,20 @@ class ConnectorsManager:
             calendar_config.username or "(none)",
         )
 
+    @staticmethod
+    def _calendar_source_state(config):
+        if config is None or not config.url:
+            return False, ""
+        from hushclaw.connectors.caldav_sync import CalDAVSyncService
+        return bool(config.enabled), CalDAVSyncService._build_sync_key(config)
+
+    @staticmethod
+    def _google_source_state(config):
+        if config is None:
+            return False, ""
+        key = f"https://www.googleapis.com/calendar/v3|{config.access_token_ref.strip().lower()}|"
+        return bool(config.enabled and config.calendar_sync_enabled), key
+
     def _init_google_calendar_sync(self, config, memory_store) -> None:
         if not config.enabled or not config.calendar_sync_enabled:
             return
@@ -155,7 +173,12 @@ class ConnectorsManager:
         return max((service.last_sync for service in (self._caldav_sync, self._google_calendar_sync, self._native_calendar_sync)
                     if service is not None), default=0.0)
 
-    async def reload(
+    async def reload(self, *args, **kwargs) -> None:
+        # File-watcher and WebSocket saves can request reload simultaneously.
+        async with self._reload_lock:
+            await self._reload(*args, **kwargs)
+
+    async def _reload(
         self,
         config: ConnectorsConfig,
         gateway,
@@ -167,6 +190,21 @@ class ConnectorsManager:
         """Stop all running connectors and restart with updated config."""
         log.info("[connectors] reloading connectors after config change")
         await self.stop()
+        calendar_state = self._calendar_source_state(calendar_config)
+        google_state = self._google_source_state(google_workspace_config)
+        if memory_store is not None:
+            for source, old, new in (
+                ("caldav", self._calendar_state, calendar_state),
+                ("google", self._google_state, google_state),
+            ):
+                # A source may already be disabled by an older build that kept
+                # its cache. Saving that disabled configuration must clean it
+                # too, without requiring an enable/disable round trip.
+                if old[1] and (not new[0] or old[1] != new[1]):
+                    cleared = memory_store.clear_synced_calendar_source(source, old[1])
+                    log.info("[connectors] removed %d imported %s events after source change", cleared, source)
+        self._calendar_state = calendar_state
+        self._google_state = google_state
         self._connectors.clear()
         self._native_calendar_sync = None
         if sys.platform == 'darwin' and memory_store is not None:

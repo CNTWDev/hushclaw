@@ -1,7 +1,6 @@
 """Pull Google Calendar into local calendar_events using OAuth, without CalDAV."""
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 from datetime import date, datetime, timedelta, timezone
@@ -25,16 +24,6 @@ class GoogleCalendarSyncService(CalDAVSyncService):
 
     def _ready_to_sync(self):
         return True  # Missing OAuth credentials are reported by the client.
-
-    async def stop(self):
-        await super().stop()
-        # asyncio cancellation cannot terminate a worker thread. Wait until it
-        # observes the stop event before a replacement service can start.
-        await asyncio.to_thread(self._wait_for_worker)
-
-    def _wait_for_worker(self):
-        with self._sync_lock:
-            pass
 
     def _fetch_and_upsert(self, cfg):
         with self._sync_lock:

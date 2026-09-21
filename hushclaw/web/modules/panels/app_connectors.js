@@ -6,7 +6,7 @@ import {
   appConnectors, appConnectorsPanel, connectionsView, connectors, wizard, els, escHtml, send,
 } from "../state.js";
 import { syncFormToState, saveSettings } from "../settings/save.js";
-import { openDialog, closeModal } from "../modal.js";
+import { openDialog, closeModal, openConfirm } from "../modal.js";
 import { withApiKey } from "../http.js";
 import { CHANNELS } from "../settings/providers.js";
 import { t } from "../i18n.js";
@@ -478,7 +478,9 @@ function _renderGitHubConfigModal() {
 }
 
 function _oauthReady(c) {
-  return (c.auth_mode || "managed") === "managed" || (c.client_id_set && c.client_secret_set);
+  return (c.auth_mode || "managed") === "managed"
+    ? Boolean(appConnectors.managed_oauth_available)
+    : Boolean(c.client_id_set && c.client_secret_set);
 }
 
 function _renderOAuthConnectBlock(id, oauthReady, connected, label) {
@@ -487,7 +489,7 @@ function _renderOAuthConnectBlock(id, oauthReady, connected, label) {
       <div>
         <div class="app-connector-kicker">${connected ? "Connected account" : "Preferred setup"}</div>
         <strong>${connected ? "Authorization is stored in the local secret store." : "Use the provider authorization page."}</strong>
-        <p>${oauthReady ? "Click connect to authorize in the provider's own consent screen." : "Switch to managed mode or add a custom OAuth client ID and secret in Advanced configuration first."}</p>
+        <p>${oauthReady ? "Click connect to authorize in the provider's own consent screen." : "未配置可用的授权服务。直接 OAuth 需要发布方注册应用；切换到 managed 模式不会自动获得授权。Mac 日历可通过设置 → 集成 → 管理本机日历来源，复用系统授权，无需你申请开发者 ID。"}</p>
       </div>
       <button id="btn-oauth-app-${id}" ${oauthReady ? "" : "disabled"}>${escHtml(label)}</button>
     </div>
@@ -534,6 +536,8 @@ function _commonInfoGrid(item, ownership = "Provided by HushClaw, not user-creat
 }
 
 function _renderGoogleWorkspaceConfigModal(item) {
+  // Server directory entries contain operational status, not presentation copy.
+  item = { ..._connectorById('google_workspace'), ...item };
   const c = appConnectors.google_workspace;
   const oauthReady = _oauthReady(c);
   return `
@@ -566,7 +570,7 @@ function _renderGoogleWorkspaceConfigModal(item) {
         </label>
         <label class="settings-field">
           <span>Scopes</span>
-          <input id="app-google-workspace-scopes" type="text" value="${escHtml((c.scopes || []).join(" "))}" placeholder="https://www.googleapis.com/auth/drive.readonly">
+          <input id="app-google-workspace-scopes" type="text" value="${escHtml((c.scopes || []).join(" "))}" placeholder="https://www.googleapis.com/auth/calendar.readonly">
         </label>
       </div>
 
@@ -1549,13 +1553,27 @@ function _testPayload(id) {
 
 function _bindConnectorActions(id) {
   if (id === "google_workspace") {
+    for (const [field, key] of [["enabled", "enabled"], ["calendar-sync", "calendar_sync_enabled"]]) {
+      document.getElementById(`app-google-workspace-${field}`)?.addEventListener("change", async (ev) => {
+        if (ev.target.checked) return;
+        ev.target.checked = true;
+        syncFormToState();
+        const ok = await openConfirm({
+          title: '关闭 Google 日历同步？',
+          message: '保存后将停止同步并清理 Google 来源已导入的全部日程副本，不删除 Google 中的原始日程。',
+          confirmText: '关闭并清理', cancelText: '取消', dangerConfirm: true,
+        });
+        if (ok) appConnectors.google_workspace[key] = false;
+        _openConnectorModal(id);
+      });
+    }
     const updateOAuthButton = () => {
       const c = appConnectors.google_workspace;
       const mode = document.getElementById("app-google-workspace-auth-mode")?.value || c.auth_mode;
       const clientId = document.getElementById("app-google-workspace-client-id")?.value.trim() || c.client_id_set;
       const secret = document.getElementById("app-google-workspace-client-secret")?.value.trim() || c.client_secret_set;
       const button = document.getElementById("btn-oauth-app-google_workspace");
-      if (button) button.disabled = mode !== "managed" && !(clientId && secret);
+      if (button) button.disabled = mode === "managed" ? !appConnectors.managed_oauth_available : !(clientId && secret);
     };
     for (const field of ["auth-mode", "client-id", "client-secret"]) {
       document.getElementById(`app-google-workspace-${field}`)?.addEventListener("input", updateOAuthButton);
