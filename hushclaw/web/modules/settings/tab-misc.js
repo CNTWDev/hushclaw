@@ -216,17 +216,18 @@ export function renderMemoryTab() {
       <div class="wfield">
         <label>${t("smem_embed_provider_label")}</label>
         <select id="mem-embed-provider">
-          <option value="local"  ${wizard.embedProvider === "local"  ? "selected" : ""}>local — built-in TF-IDF (无需配置)</option>
+          <option value="local"  ${wizard.embedProvider === "local"  ? "selected" : ""}>local — 内置词频哈希（无需配置）</option>
+          <option value="fastembed" ${wizard.embedProvider === "fastembed" ? "selected" : ""}>fastembed — 本地中文语义模型（可选安装）</option>
           <option value="ollama" ${wizard.embedProvider === "ollama" ? "selected" : ""}>ollama — 本地模型，中文效果最佳</option>
           <option value="openai" ${wizard.embedProvider === "openai" ? "selected" : ""}>openai — OpenAI Embeddings API</option>
         </select>
-        <div class="wfield-hint">local: 无依赖，语义能力弱。ollama: 需本地运行 Ollama，支持中文。openai: 效果最强，消耗 API credits。</div>
+        <div class="wfield-hint">fastembed 需安装 hushclaw[memory-local]；首次选择模型需下载权重。local 无额外依赖；ollama 需本地运行 Ollama；openai 消耗 API credits。</div>
       </div>
       <div class="wfield">
         <label>${t("smem_embed_model_label")}</label>
         <input type="text" id="mem-embed-model" placeholder="留空使用 provider 默认模型"
                value="${escHtml(wizard.embedModel)}">
-        <div class="wfield-hint">示例：shaw/dmeta-embedding-zh（ollama 中文）、bge-m3（多语言）、text-embedding-3-small（openai）。留空则 ollama 用 nomic-embed-text，openai 用 text-embedding-3-small。</div>
+        <div class="wfield-hint">示例：BAAI/bge-small-zh-v1.5（fastembed 默认）、bge-m3（ollama）、text-embedding-3-small（openai）。</div>
       </div>
     </div>
     <div class="settings-section">

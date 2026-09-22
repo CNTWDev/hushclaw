@@ -127,16 +127,17 @@ class MarkdownStore:
         if row is None:
             return False
         now = int(time.time())
-        path = Path(row["path"])
-        meta = {
-            "note_id": note_id,
-            "title": row["title"],
-            "tags": json.dumps(tags if tags is not None else json.loads(row["tags"])),
-            "created": row["created"],
-            "modified": now,
-        }
-        full = f"{self._render_frontmatter(meta)}\n\n{content}\n"
-        path.write_text(full, encoding="utf-8")
+        if row["path"]:
+            path = Path(row["path"])
+            meta = {
+                "note_id": note_id,
+                "title": row["title"],
+                "tags": json.dumps(tags if tags is not None else json.loads(row["tags"])),
+                "created": row["created"],
+                "modified": now,
+            }
+            full = f"{self._render_frontmatter(meta)}\n\n{content}\n"
+            path.write_text(full, encoding="utf-8")
 
         tags_json = json.dumps(tags) if tags is not None else row["tags"]
         self.conn.execute(
@@ -146,6 +147,12 @@ class MarkdownStore:
         self.conn.execute(
             "INSERT OR REPLACE INTO note_bodies (note_id, body) VALUES (?,?)",
             (note_id, content),
+        )
+        self.conn.execute("DELETE FROM notes_fts WHERE note_id=?", (note_id,))
+        self.conn.execute(
+            "INSERT INTO notes_fts(rowid,note_id,title,body,tags) "
+            "SELECT rowid,note_id,title,?,? FROM notes WHERE note_id=?",
+            (content, tags_json, note_id),
         )
         self.conn.commit()
         return True

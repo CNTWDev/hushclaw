@@ -29,7 +29,8 @@ timeout = 360
 [memory]
 # data_dir = ""          # Override storage directory (or set GHOSTCLAW_DATA_DIR)
 max_recall_results = 5
-embed_provider = "local"  # local | ollama | openai | anthropic
+embed_provider = "local"  # local | fastembed | ollama | openai
+# embed_model = "BAAI/bge-small-zh-v1.5"  # fastembed 默认
 
 [tools]
 enabled = [

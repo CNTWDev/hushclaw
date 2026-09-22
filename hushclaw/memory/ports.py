@@ -7,9 +7,9 @@ from typing import Any, TYPE_CHECKING
 
 from hushclaw.memory.events import _conn_lock
 from hushclaw.memory.fts import FTSSearch
-from hushclaw.memory.kinds import RECALL_MEMORY_KINDS, SYSTEM_MEMORY_TAGS
+from hushclaw.memory.kinds import RECALL_MEMORY_KINDS
+from hushclaw.memory.retrieval import search_notes, visible_note_ids
 from hushclaw.memory.sqlite_runtime import SQLiteReadConnections
-from hushclaw.memory.store import _FTS_SHORTCUT_THRESHOLD
 from hushclaw.memory.vectors import VectorStore
 
 if TYPE_CHECKING:
@@ -148,21 +148,20 @@ class SQLiteMemoryPort(MemoryPort):
     ) -> str:
         conn = self._read_conn()
         if conn is None:
-            return self._locked(lambda: self.store.recall(query, limit=limit))
+            return self._locked(lambda: self._format_recall(
+                self.store.search(query, limit=limit, scopes=scopes,
+                                  include_kinds=RECALL_MEMORY_KINDS), limit))
         results = self._read_search(query, limit=limit, scopes=scopes, include_kinds=RECALL_MEMORY_KINDS)
         if results:
-            return "\n\n".join(
-                f"[{r.get('title') or r.get('note_id')}]\n{str(r.get('body') or '')[:300]}"
-                for r in results[:limit]
-            )
-        if scopes:
-            rows = self._read_recent_notes_by_scopes(conn, scopes, limit=limit, include_kinds=RECALL_MEMORY_KINDS)
-            if rows:
-                return "\n\n".join(
-                    f"[{i}] {r.get('title') or r.get('note_id')}\n{str(r.get('body') or '')[:300]}"
-                    for i, r in enumerate(rows, 1)
-                )
+            return self._format_recall(results, limit)
         return ""
+
+    @staticmethod
+    def _format_recall(results: list[dict], limit: int) -> str:
+        return "\n\n".join(
+            f"[{r.get('title') or r.get('note_id')}]\n{str(r.get('body') or '')[:300]}"
+            for r in results[:limit]
+        )
 
     def search(
         self,
@@ -174,7 +173,7 @@ class SQLiteMemoryPort(MemoryPort):
     ) -> list[dict]:
         conn = self._read_conn()
         if conn is None:
-            return self._locked(lambda: self.store.search(query, limit=limit))
+            return self._locked(lambda: self.store.search(query, limit=limit, scopes=scopes))
         return self._read_search(query, limit=limit, scopes=scopes)
 
     def _read_search(
@@ -187,94 +186,12 @@ class SQLiteMemoryPort(MemoryPort):
     ) -> list[dict]:
         conn = self._read_conn()
         if conn is None:
-            return self.store.search(query, limit=limit, include_kinds=include_kinds)
-        visible_kinds = include_kinds
-        fts = FTSSearch(conn)
-        vec = self._read_vector_store(conn)
-        blocked_tags = sorted(SYSTEM_MEMORY_TAGS)
-        fts_results = fts.search(query, limit * 2, scopes=scopes, exclude_tags=blocked_tags)
-        fts_max = max((r.get("score_fts", 0.0) for r in fts_results), default=0.0)
-        if fts_results and fts_max >= _FTS_SHORTCUT_THRESHOLD:
-            merged = [
-                {
-                    "note_id": r["note_id"],
-                    "title": r.get("title", ""),
-                    "body": r.get("body", ""),
-                    "tags": r.get("tags", []),
-                    "score": self.store.fts_weight * r.get("score_fts", 0.0),
-                }
-                for r in fts_results
-            ]
-        else:
-            fts_map = {r["note_id"]: r for r in fts_results}
-            vec_results = {r["note_id"]: r for r in vec.search(query, limit * 2, scopes=scopes, exclude_tags=blocked_tags)}
-            merged = []
-            for note_id in set(fts_map) | set(vec_results):
-                fts_score = fts_map.get(note_id, {}).get("score_fts", 0.0)
-                vec_score = vec_results.get(note_id, {}).get("score_vec", 0.0)
-                note = fts_map.get(note_id) or vec_results.get(note_id, {})
-                merged.append({
-                    "note_id": note_id,
-                    "title": note.get("title", ""),
-                    "body": note.get("body", ""),
-                    "tags": note.get("tags", []),
-                    "score": self.store.fts_weight * fts_score + self.store.vec_weight * vec_score,
-                })
-
-        meta = self._read_note_metadata(conn, [r["note_id"] for r in merged])
-        filtered = []
-        for item in merged:
-            _rc, note_type, memory_kind = meta.get(item["note_id"], (0, "fact", "project_knowledge"))
-            if visible_kinds and memory_kind not in visible_kinds:
-                continue
-            item["note_type"] = note_type
-            item["memory_kind"] = memory_kind
-            filtered.append(item)
-        filtered.sort(key=lambda item: item["score"], reverse=True)
-        return filtered[:limit]
-
-    @staticmethod
-    def _read_note_metadata(conn, note_ids: list[str]) -> dict[str, tuple[int, str, str]]:
-        if not note_ids:
-            return {}
-        placeholders = ",".join("?" * len(note_ids))
-        rows = conn.execute(
-            f"SELECT note_id, recall_count, note_type, memory_kind FROM notes WHERE note_id IN ({placeholders})",
-            note_ids,
-        ).fetchall()
-        return {
-            row["note_id"]: (
-                int(row["recall_count"] or 0),
-                row["note_type"] or "fact",
-                row["memory_kind"] or "project_knowledge",
-            )
-            for row in rows
-        }
-
-    @staticmethod
-    def _read_recent_notes_by_scopes(
-        conn,
-        scopes: list[str],
-        *,
-        limit: int,
-        include_kinds: set[str] | None = None,
-    ) -> list[dict]:
-        scope_ph = ",".join("?" * len(scopes))
-        clauses = [f"n.scope IN ({scope_ph})"]
-        params: list[object] = list(scopes)
-        if include_kinds:
-            kind_ph = ",".join("?" * len(include_kinds))
-            clauses.append(f"n.memory_kind IN ({kind_ph})")
-            params.extend(sorted(include_kinds))
-        rows = conn.execute(
-            f"SELECT n.note_id, n.title, n.tags, n.scope, n.note_type, n.memory_kind, b.body FROM notes n "
-            f"LEFT JOIN note_bodies b USING(note_id) "
-            f"WHERE {' AND '.join(clauses)} "
-            f"ORDER BY n.modified DESC LIMIT ?",
-            (*params, limit),
-        ).fetchall()
-        import json
-        return [{**dict(row), "tags": json.loads(row["tags"] or "[]")} for row in rows]
+            return self.store.search(query, limit=limit, scopes=scopes, include_kinds=include_kinds)
+        return search_notes(
+            conn, FTSSearch(conn), self._read_vector_store(conn), query,
+            limit=limit, scopes=scopes, include_kinds=include_kinds,
+            fts_weight=self.store.fts_weight, vec_weight=self.store.vec_weight,
+        )
 
     def update(
         self,
@@ -298,7 +215,7 @@ class SQLiteMemoryPort(MemoryPort):
     ) -> bool:
         def _do() -> bool:
             note = self.store.get_note(note_id)
-            if not note:
+            if not note or note_id not in visible_note_ids(self.store.conn, [note_id]):
                 return False
             content = str(note.get("body") or note.get("content") or "")
             title = str(note.get("title") or "")

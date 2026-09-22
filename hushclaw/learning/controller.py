@@ -351,16 +351,12 @@ class LearningController:
                 tags = [str(t) for t in tags if isinstance(t, str)][:3]
                 tags.append("_auto_extract")
                 try:
-                    if not self.memory.note_exists_with_title(title):
-                        self.memory.remember(
-                            body,
-                            title=title,
-                            tags=tags,
-                            note_type=note_type,
-                            source_message_id=trace.source_message_id,
-                            persist_to_disk=False,
-                        )
-                        saved += 1
+                    scope = f"workspace:{trace.workspace}" if trace.workspace else "global"
+                    self.memory.remember_extracted(
+                        body, title=title, tags=tags, scope=scope,
+                        note_type=note_type, source_message_id=trace.source_message_id,
+                    )
+                    saved += 1
                 except Exception:
                     if strict:
                         raise

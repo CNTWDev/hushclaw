@@ -1,10 +1,10 @@
 """Vector embedding storage and cosine similarity search.
 
 Backends (in descending preference):
-  1. local  — hashed term-frequency embedding, pure stdlib (default)
-  2. ollama — nomic-embed-text via local HTTP
-  3. openai — OpenAI embeddings API (urllib)
-  4. None   — falls back to FTS-only
+  1. local     — hashed term-frequency embedding, pure stdlib (default)
+  2. fastembed — optional local neural model, no remote inference
+  3. ollama    — model served over local HTTP
+  4. openai    — OpenAI embeddings API (urllib)
 """
 from __future__ import annotations
 
@@ -19,9 +19,29 @@ import struct
 import urllib.request
 import urllib.error
 from collections import Counter
+from functools import lru_cache
 from pathlib import Path
 
 _log = logging.getLogger(__name__)
+_DEFAULT_FASTEMBED_MODEL = "BAAI/bge-small-zh-v1.5"
+
+
+@lru_cache(maxsize=2)
+def _fastembed_model(model_name: str):
+    from fastembed import TextEmbedding
+    return TextEmbedding(model_name=model_name)
+
+
+def _fastembed_embed(text: str, model_name: str, *, is_query: bool) -> list[float] | None:
+    try:
+        model = _fastembed_model(model_name)
+        vectors = model.query_embed(text) if is_query else model.passage_embed([text])
+        return [float(value) for value in next(iter(vectors))]
+    except ImportError:
+        _log.warning("fastembed unavailable; install hushclaw[memory-local] for neural local retrieval")
+    except Exception as exc:
+        _log.warning("fastembed unavailable (%s); using keyword retrieval only", type(exc).__name__)
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -126,16 +146,16 @@ class VectorStore:
         self.api_key = api_key
         self.embed_model = embed_model
         # Composite key stored in the model column: "provider:model_or_default"
-        _model_tag = embed_model or "default"
+        _model_tag = embed_model or (_DEFAULT_FASTEMBED_MODEL if embed_provider == "fastembed" else "default")
         self._model_key = f"{embed_provider}:{_model_tag}"
         if embed_provider == "local":
             self._model_key += ":stable-v2"
         self._query_cache = {}
 
-    def _embed(self, text: str) -> list[float] | None:
+    def _embed(self, text: str, *, is_query: bool = False) -> list[float] | None:
         # Very large imported notes can exceed an embedding model's context.
         # Keep a bounded head/tail representation; FTS still indexes the full body.
-        if self.embed_provider in {'ollama', 'openai'} and len(text) > 4000:
+        if self.embed_provider in {'ollama', 'openai', 'fastembed'} and len(text) > 4000:
             text = text[:3000] + '\n…\n' + text[-997:]
         if self.embed_provider == "ollama":
             model = self.embed_model or "nomic-embed-text"
@@ -150,6 +170,9 @@ class VectorStore:
                 return vec
             _log.warning("embedding unavailable; using keyword retrieval only")
             return None
+        if self.embed_provider == "fastembed":
+            return _fastembed_embed(text, self.embed_model or _DEFAULT_FASTEMBED_MODEL,
+                                    is_query=is_query)
         if self.embed_provider == "local":
             return _local_embed(text)
         return None
@@ -175,7 +198,7 @@ class VectorStore:
     ) -> list[dict]:
         """Return notes ranked by cosine similarity to query embedding."""
         cached = self._query_cache.get(query)
-        q_vec = cached[1] if cached and time.monotonic() - cached[0] < 60 else self._embed(query)
+        q_vec = cached[1] if cached and time.monotonic() - cached[0] < 60 else self._embed(query, is_query=True)
         if q_vec is None:
             return []
         if len(self._query_cache) >= 64:

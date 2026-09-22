@@ -43,15 +43,12 @@ from hushclaw.memory.message_feedback import MessageFeedbackStore
 from hushclaw.memory.fts import FTSSearch, _build_fts_query
 from hushclaw.memory.kinds import (
     RECALL_MEMORY_KINDS,
-    SYSTEM_MEMORY_TAGS,
-    USER_VISIBLE_MEMORY_KINDS,
     infer_memory_kind,
 )
 from hushclaw.memory.vectors import VectorStore, _tokenize
+from hushclaw.memory.retrieval import CURRENT_NOTE_SQL, memory_revision, search_notes, visible_note_ids
+from hushclaw.util.tokens import estimate_tokens
 from hushclaw.util.ids import make_id
-
-# FTS score threshold above which vector search is skipped (saves embed cost)
-_FTS_SHORTCUT_THRESHOLD = 0.8
 
 # Recall cache TTL in seconds (same query within same session)
 _CACHE_TTL = 30.0
@@ -161,6 +158,7 @@ class MemoryStore:
         note_type: str = "fact",
         memory_kind: str = "",
         source_message_id: str = "",
+        supersedes_note_id: str = "",
     ) -> str:
         """Persist a note and index it. Returns note_id.
 
@@ -183,6 +181,23 @@ class MemoryStore:
                 (source_mid, note_id),
             )
             self.conn.commit()
+        if supersedes_note_id:
+            previous = self.conn.execute(
+                "SELECT scope FROM notes WHERE note_id=? AND status='active'",
+                (supersedes_note_id,),
+            ).fetchone()
+            if not previous or previous["scope"] != scope:
+                self._md.delete_note(note_id)
+                raise ValueError("superseded note must be active and in the same scope")
+            self.conn.execute(
+                "UPDATE notes SET status='superseded' WHERE note_id=?",
+                (supersedes_note_id,),
+            )
+            self.conn.execute(
+                "UPDATE notes SET supersedes_note_id=? WHERE note_id=?",
+                (supersedes_note_id, note_id),
+            )
+            self.conn.commit()
         self._vec.index(note_id, f"{title}\n{content}")
         # Auto-aggregate belief/interest notes into belief_models.
         # _auto_extract tag is a UI visibility filter only — it does NOT block
@@ -196,13 +211,20 @@ class MemoryStore:
         return self._md.read_note(note_id)
 
     def update_note(self, note_id: str, content: str, tags: list[str] | None = None) -> bool:
+        previous = self.get_note(note_id)
         ok = self._md.update_note(note_id, content, tags)
         if ok:
             self._vec.index(note_id, content)
+            if previous and previous["note_type"] in {"belief", "interest"}:
+                self.rebuild_belief_models(scopes=[previous["scope"]])
         return ok
 
     def delete_note(self, note_id: str) -> bool:
-        return self._md.delete_note(note_id)
+        note = self.get_note(note_id)
+        deleted = self._md.delete_note(note_id)
+        if deleted and note and note["note_type"] in {"belief", "interest"}:
+            self.rebuild_belief_models(scopes=[note["scope"]])
+        return deleted
 
     @staticmethod
     def _parse_note_tags(raw) -> list[str]:
@@ -351,7 +373,7 @@ class MemoryStore:
         view = str(view or "curated").strip().lower()
         if view not in {"curated", "suggested", "all"}:
             view = "curated"
-        clauses: list[str] = []
+        clauses: list[str] = [CURRENT_NOTE_SQL]
         params: list[object] = []
         if view == "curated":
             clauses.append("n.tags LIKE ?")
@@ -495,6 +517,25 @@ class MemoryStore:
             "SELECT 1 FROM notes WHERE title=? LIMIT 1", (title,)
         ).fetchone()
         return row is not None
+
+    def remember_extracted(self, content: str, *, title: str, scope: str = "global",
+                           note_type: str = "fact", tags: list[str] | None = None,
+                           memory_kind: str = "", source_message_id: str = "") -> str:
+        """Idempotently capture extracted facts and retain prior versions on correction."""
+        row = self.conn.execute(
+            """SELECT n.note_id, b.body FROM notes n JOIN note_bodies b USING(note_id)
+               WHERE n.title=? AND n.scope=? AND n.note_type=? AND n.status='active'
+               ORDER BY n.modified DESC,n.rowid DESC LIMIT 1""",
+            (title, scope, note_type),
+        ).fetchone()
+        if row and row["body"].strip() == content.strip():
+            return row["note_id"]
+        return self.remember(
+            content, title=title, scope=scope, note_type=note_type, tags=tags,
+            memory_kind=memory_kind, source_message_id=source_message_id,
+            persist_to_disk=False,
+            supersedes_note_id=row["note_id"] if row else "",
+        )
 
     def delete_by_scope(self, scope: str) -> int:
         """Delete all notes with the given scope. Returns the number deleted."""
@@ -748,7 +789,7 @@ class MemoryStore:
 
     def rebuild_belief_models(self, *, dry_run: bool = False, scopes: list[str] | None = None) -> dict:
         """Rebuild belief_models from historical belief/interest notes using domain inference."""
-        where = ["n.note_type IN ('belief', 'interest')"]
+        where = ["n.note_type IN ('belief', 'interest')", "n.status='active'"]
         params: list[object] = []
         if scopes:
             placeholders = ",".join("?" * len(scopes))
@@ -960,20 +1001,26 @@ class MemoryStore:
             # ranked is descending, so once we fall below threshold all remaining will too.
             if has_query and self._score_belief_model(m, query) < self._BELIEF_ROUTE_MIN_SCORE:
                 break
-            entries = m["entries"]
+            original_entries = m["entries"]
+            allowed = visible_note_ids(
+                self.conn,
+                [str(item.get("note_id") or "") for item in original_entries],
+            )
+            entries = [item for item in original_entries if item.get("note_id") in allowed]
             count = len(entries)
             if count == 0:
                 continue
             from datetime import datetime, timezone
             date_str = datetime.fromtimestamp(m["updated"], tz=timezone.utc).strftime("%Y-%m-%d")
             header = f"**{m['domain']}** ({count} belief{'s' if count != 1 else ''}, updated {date_str})"
-            latest = m["latest"][:120]
+            latest = str(entries[0].get("content") or "")[:120]
             line = f"{header}\n→ Current: {latest}"
-            current_stance = str(m.get("current_stance") or "").strip()
-            summary = str(m.get("summary") or "").strip()
-            trajectory = str(m.get("trajectory") or "").strip()
-            change_drivers = [str(s).strip() for s in (m.get("change_drivers") or []) if str(s).strip()]
-            signals = [str(s).strip() for s in (m.get("signals") or []) if str(s).strip()]
+            model_fresh = len(entries) == len(original_entries)
+            current_stance = str(m.get("current_stance") or "").strip() if model_fresh else ""
+            summary = str(m.get("summary") or "").strip() if model_fresh else ""
+            trajectory = str(m.get("trajectory") or "").strip() if model_fresh else ""
+            change_drivers = [str(s).strip() for s in (m.get("change_drivers") or []) if str(s).strip()] if model_fresh else []
+            signals = [str(s).strip() for s in (m.get("signals") or []) if str(s).strip()] if model_fresh else []
             history_line, fallback_trajectory = self._summarize_belief_evolution(entries)
             if current_stance and current_stance != latest:
                 line += f"\n→ Current stance: {current_stance[:160]}"
@@ -1331,7 +1378,7 @@ class MemoryStore:
         include_kinds: set[str] | None = None,
     ) -> list[dict]:
         """Return the most recently modified notes with their bodies."""
-        clauses: list[str] = []
+        clauses: list[str] = [CURRENT_NOTE_SQL]
         params: list[object] = []
         if exclude_tags:
             ph = ",".join("?" * len(exclude_tags))
@@ -1366,7 +1413,7 @@ class MemoryStore:
     ) -> list[dict]:
         """Return the most recently modified notes whose scope is in `scopes`."""
         scope_ph = ",".join("?" * len(scopes))
-        clauses = [f"n.scope IN ({scope_ph})"]
+        clauses = [CURRENT_NOTE_SQL, f"n.scope IN ({scope_ph})"]
         params: list[object] = list(scopes)
         if exclude_tags:
             tag_ph = ",".join("?" * len(exclude_tags))
@@ -1419,46 +1466,13 @@ class MemoryStore:
         exclude_tags: list[str] | None = None,
         scopes: list[str] | None = None,
     ) -> list[dict]:
-        """Hybrid FTS + vector search, merged by score."""
-        visible_kinds = include_kinds if include_kinds is not None else USER_VISIBLE_MEMORY_KINDS
-        blocked_tags = list(dict.fromkeys((exclude_tags or []) + sorted(SYSTEM_MEMORY_TAGS)))
-        fts_results = {r["note_id"]: r for r in self._fts.search(query, limit * 2, scopes=scopes, exclude_tags=blocked_tags)}
-        vec_results = {r["note_id"]: r for r in self._vec.search(query, limit * 2, scopes=scopes, exclude_tags=blocked_tags)
-                       if r.get('score_vec', 0) >= (0.12 if self._vec.embed_provider == 'local' else 0.4)}
-        fts_rank = {key: rank + 1 for rank, key in enumerate(fts_results)}
-        vec_rank = {key: rank + 1 for rank, key in enumerate(vec_results)}
-
-        all_ids = set(fts_results) | set(vec_results)
-        merged = []
-        for nid in all_ids:
-            fts_score = fts_results.get(nid, {}).get("score_fts", 0.0)
-            vec_score = vec_results.get(nid, {}).get("score_vec", 0.0)
-            # Reciprocal rank fusion: BM25 and cosine have incompatible scales.
-            combined = ((self.fts_weight * 61 / (60 + fts_rank[nid])) if nid in fts_rank else 0) + ((self.vec_weight * 61 / (60 + vec_rank[nid])) if nid in vec_rank else 0)
-            note = fts_results.get(nid) or vec_results.get(nid, {})
-            merged.append({
-                "note_id": nid,
-                "title": note.get("title", ""),
-                "body": note.get("body", ""),
-                "tags": note.get("tags", []),
-                "score": combined,
-            })
-
-        meta = self._fetch_note_metadata([r["note_id"] for r in merged])
-        filtered = []
-        rejected = {r[0] for r in self.conn.execute("SELECT evidence_id FROM memory_feedback WHERE verdict='rejected'")}
-        for r in merged:
-            if 'note:' + r['note_id'] in rejected:
-                continue
-            _rc, note_type, memory_kind = meta.get(r["note_id"], (0, "fact", "project_knowledge"))
-            if visible_kinds and memory_kind not in visible_kinds:
-                continue
-            r["note_type"] = note_type
-            r["memory_kind"] = memory_kind
-            filtered.append(r)
-
-        filtered.sort(key=lambda x: x["score"], reverse=True)
-        return filtered[:limit]
+        """Search through the shared visibility and ranking policy."""
+        return search_notes(
+            self.conn, self._fts, self._vec, query, limit=limit, scopes=scopes,
+            include_kinds=include_kinds, exclude_tags=exclude_tags,
+            fts_weight=self.fts_weight,
+            vec_weight=self.vec_weight,
+        )
 
     def recall(self, query: str, limit: int = 5) -> str:
         """Return a formatted string of top search results for LLM injection."""
@@ -1487,9 +1501,9 @@ class MemoryStore:
         """
         Token-budget-aware recall for LLM injection.
 
-        FTS-first: if FTS scores are high, skips vector search.
-        Score-gated: skips results below min_score.
-        Budget-capped: stops injection at max_tokens (approx 1 token ≈ 4 chars).
+        Shared hybrid search with persistent visibility rules.
+        Score-gated: skips results below min_score (RRF scale).
+        Budget-capped: stops injection at max_tokens.
         Session-cached: same query within same session cached for 30s.
         decay_rate: exponential time-decay λ; score × e^(-λ × age_days). 0.0 = no decay.
         retrieval_temperature: softmax temperature for random sampling. 0.0 = deterministic top-k.
@@ -1498,60 +1512,32 @@ class MemoryStore:
         max_age_days: drop notes older than N days from recall. 0 = no limit.
         """
         # Cache key includes creativity params and scopes so different modes don't collide
-        cache_key = (session_id or "__global__", query, decay_rate, retrieval_temperature,
+        cache_key = (memory_revision(self.conn), session_id or "__global__", query, decay_rate, retrieval_temperature,
                      min_score, max_tokens, limit,
-                     tuple(sorted(scopes)) if scopes else None, max_age_days,
+                     tuple(sorted(scopes)) if scopes is not None else None, max_age_days,
                      tuple(sorted(exclude_types)) if exclude_types else None,
-                     tuple(sorted(include_kinds)) if include_kinds else None)
+                     tuple(sorted(include_kinds)) if include_kinds else None,
+                     self._vec._model_key)
         cached = self._recall_cache.get(cache_key)
         if cached and time.time() - cached[1] < _CACHE_TTL:
             return cached[0]
 
         # Internal system notes are never surfaced as recalled memories.
         # _compact_archive: raw conversation dumps (huge, noisy).
-        _exclude = sorted(SYSTEM_MEMORY_TAGS)
         recall_kinds = include_kinds if include_kinds is not None else RECALL_MEMORY_KINDS
 
         # Empty query = serendipity random sampling from all notes
-        if not query.strip():
+        if scopes == []:
+            merged = []
+        elif not query.strip():
             merged = self._random_sample_notes(limit * 2, scopes=scopes, include_kinds=recall_kinds)
         else:
-            # FTS-first strategy
-            fts_results = self._fts.search(query, limit * 2, scopes=scopes,
-                                           exclude_tags=_exclude)
-            fts_max = max((r.get("score_fts", 0.0) for r in fts_results), default=0.0)
-
-            if fts_results and fts_max >= _FTS_SHORTCUT_THRESHOLD:
-                # FTS is confident enough — skip vector search to save cost
-                merged = [
-                    {
-                        "note_id": r["note_id"],
-                        "title": r.get("title", ""),
-                        "body": r.get("body", ""),
-                        "created": r.get("created"),
-                        "score": self.fts_weight * r.get("score_fts", 0.0),
-                    }
-                    for r in fts_results
-                ]
-            else:
-                # Full hybrid: FTS + vector
-                vec_results = {r["note_id"]: r for r in self._vec.search(query, limit * 2, scopes=scopes,
-                                                                          exclude_tags=_exclude)}
-                fts_map = {r["note_id"]: r for r in fts_results}
-                all_ids = set(fts_map) | set(vec_results)
-                merged = []
-                for nid in all_ids:
-                    fts_s = fts_map.get(nid, {}).get("score_fts", 0.0)
-                    vec_s = vec_results.get(nid, {}).get("score_vec", 0.0)
-                    combined = self.fts_weight * fts_s + self.vec_weight * vec_s
-                    note = fts_map.get(nid) or vec_results.get(nid, {})
-                    merged.append({
-                        "note_id": nid,
-                        "title": note.get("title", ""),
-                        "body": note.get("body", ""),
-                        "created": note.get("created"),
-                        "score": combined,
-                    })
+            merged = search_notes(
+                self.conn, self._fts, self._vec, query, limit=max(20, limit * 3),
+                scopes=scopes, include_kinds=recall_kinds,
+                exclude_types=exclude_types,
+                fts_weight=self.fts_weight, vec_weight=self.vec_weight,
+            )
 
         # Apply time-decay penalty and max_age_days filter
         if decay_rate > 0.0 or max_age_days > 0:
@@ -1571,29 +1557,6 @@ class MemoryStore:
                     r["score"] = r["score"] * math.exp(-decay_rate * age_days)
                 kept.append(r)
             merged = kept
-
-        # recall_count boost and note_type/kind filter/boost — single batch DB query.
-        _TYPE_BOOST = {"interest": 1.10, "belief": 1.10, "preference": 1.10}
-        if merged:
-            rc_map = self._fetch_note_metadata([r["note_id"] for r in merged])
-            kept_after_type = []
-            for r in merged:
-                rc, note_type, memory_kind = rc_map.get(r["note_id"], (0, "fact", "project_knowledge"))
-                # Exclude blocked types (e.g. action_log)
-                if exclude_types and note_type in exclude_types:
-                    continue
-                if recall_kinds and memory_kind not in recall_kinds:
-                    continue
-                if rc > 0:
-                    r["score"] = r["score"] * (1.0 + 0.1 * math.log1p(rc))
-                # Boost user-modeling types
-                type_mult = _TYPE_BOOST.get(note_type, 1.0)
-                if type_mult != 1.0:
-                    r["score"] = r["score"] * type_mult
-                r["note_type"] = note_type
-                r["memory_kind"] = memory_kind
-                kept_after_type.append(r)
-            merged = kept_after_type
 
         # Score gate
         filtered = [r for r in merged if r["score"] >= min_score]
@@ -1624,9 +1587,10 @@ class MemoryStore:
                     chosen.append(filtered[idx])
             # Fill any remaining slots with highest-scoring unselected items
             if len(chosen) < k:
-                for i, r in enumerate(sorted(range(len(filtered)), key=lambda i: filtered[i]["score"], reverse=True)):
-                    if r not in chosen_indices and len(chosen) < k:
-                        chosen.append(filtered[r])
+                for index in sorted(range(len(filtered)), key=lambda i: filtered[i]["score"], reverse=True):
+                    if index not in chosen_indices and len(chosen) < k:
+                        chosen_indices.add(index)
+                        chosen.append(filtered[index])
             filtered = chosen
         else:
             filtered = sorted(filtered, key=lambda r: r["score"], reverse=True)
@@ -1641,7 +1605,7 @@ class MemoryStore:
             for r in filtered[:limit]:
                 body = r["body"][:300]
                 entry = f"[{r['title']}]\n{body}"
-                entry_tokens = max(1, len(entry) // 4)
+                entry_tokens = estimate_tokens(entry)
                 if max_tokens > 0 and (total_tokens + entry_tokens > max_tokens):
                     break
                 parts.append(entry)
@@ -1679,7 +1643,15 @@ class MemoryStore:
         include_kinds: set[str] | None = None,
     ) -> list[dict]:
         """Return random notes for serendipity injection. All get score=1.0."""
-        clauses: list[str] = []
+        if scopes == []:
+            return []
+        clauses: list[str] = [
+            "n.status='active'",
+            "NOT EXISTS (SELECT 1 FROM memory_feedback mf WHERE mf.evidence_id='note:' || n.note_id AND mf.verdict='rejected')",
+            "NOT EXISTS (SELECT 1 FROM message_states ms WHERE ms.message_id=n.source_message_id AND (ms.hidden=1 OR ms.excluded=1 OR ms.purged=1))",
+            "(n.source_message_id='' OR (n.source_message_id LIKE 'turn:%' AND EXISTS (SELECT 1 FROM turns t WHERE t.turn_id=substr(n.source_message_id,6))) OR (n.source_message_id LIKE 'event:%' AND EXISTS (SELECT 1 FROM events e WHERE e.event_id=substr(n.source_message_id,7))) OR (n.source_message_id NOT LIKE 'turn:%' AND n.source_message_id NOT LIKE 'event:%'))",
+            "NOT EXISTS (SELECT 1 FROM json_each(n.tags) WHERE json_each.value IN ('_compact_archive','_compact_abstractive','_skill_usage','_correction'))",
+        ]
         params: list[object] = []
         if scopes:
             placeholders = ",".join("?" * len(scopes))

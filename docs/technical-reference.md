@@ -66,6 +66,8 @@ Raw notes indexed at save time with semantic type:
 
 Recall combines scoped BM25 and vector candidates with **reciprocal-rank fusion**, rather than mixing incompatible raw scores. Chinese text uses overlapping character bigrams. Local embeddings are deterministic across process restarts; a failed remote embedding request falls back to keyword retrieval, never writes a local vector under a remote model name. Query embeddings have a bounded 60-second cache.
 
+`local` 是零依赖的词频哈希，不能理解没有共同词的同义表达。可选的 `fastembed` 使用本地中文神经模型，安装 `pip install 'hushclaw[memory-local]'`，然后设置 `[memory] embed_provider = "fastembed"`；默认模型为 `BAAI/bge-small-zh-v1.5`，首次使用时会下载权重。改换模型后执行下文的 `python -m hushclaw.memory.reindex --apply`，直到报告的 candidates 为 0；切回旧模型也需要重建派生向量。原始笔记和会话不受重建影响。当前检索在 1000 条合成笔记、本机哈希后端上测得 p95 约 4 ms；这不代表真实语料或回答质量。
+
 ### 2. User Profile
 
 Structured facts extracted from your interaction patterns, organized by category:

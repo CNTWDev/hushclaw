@@ -23,7 +23,7 @@ from hushclaw.memory.encryption import (
     get_sqlcipher_driver,
 )
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 DB_NAME = "memory.db"
 DB_SIDE_CARS = (DB_NAME, f"{DB_NAME}-wal", f"{DB_NAME}-shm")
 APPLICATION_ID = 0x4853434C  # "HSCL"; identifies HushClaw-owned SQLite files.
@@ -1187,6 +1187,27 @@ _VERSIONED_MIGRATIONS += (
     )),
 )
 
+_VERSIONED_MIGRATIONS += (
+    SchemaMigration(version=13, name="memory-lifecycle-revision", statements=(
+        "ALTER TABLE notes ADD COLUMN status TEXT NOT NULL DEFAULT 'active'",
+        "ALTER TABLE notes ADD COLUMN supersedes_note_id TEXT NOT NULL DEFAULT ''",
+        "CREATE TABLE IF NOT EXISTS memory_meta (key TEXT PRIMARY KEY, value INTEGER NOT NULL)",
+        "INSERT OR IGNORE INTO memory_meta(key,value) VALUES ('revision',0)",
+        "CREATE TRIGGER IF NOT EXISTS memory_notes_insert AFTER INSERT ON notes BEGIN UPDATE memory_meta SET value=value+1 WHERE key='revision'; END",
+        "CREATE TRIGGER IF NOT EXISTS memory_notes_delete AFTER DELETE ON notes BEGIN UPDATE memory_meta SET value=value+1 WHERE key='revision'; END",
+        "CREATE TRIGGER IF NOT EXISTS memory_notes_update AFTER UPDATE OF title,tags,scope,note_type,memory_kind,source_message_id,status,supersedes_note_id ON notes BEGIN UPDATE memory_meta SET value=value+1 WHERE key='revision'; END",
+        "CREATE TRIGGER IF NOT EXISTS memory_bodies_update AFTER UPDATE OF body ON note_bodies BEGIN UPDATE memory_meta SET value=value+1 WHERE key='revision'; END",
+        "CREATE TRIGGER IF NOT EXISTS memory_feedback_insert AFTER INSERT ON memory_feedback BEGIN UPDATE memory_meta SET value=value+1 WHERE key='revision'; END",
+        "CREATE TRIGGER IF NOT EXISTS memory_feedback_update AFTER UPDATE ON memory_feedback BEGIN UPDATE memory_meta SET value=value+1 WHERE key='revision'; END",
+        "CREATE TRIGGER IF NOT EXISTS memory_feedback_delete AFTER DELETE ON memory_feedback BEGIN UPDATE memory_meta SET value=value+1 WHERE key='revision'; END",
+        "CREATE TRIGGER IF NOT EXISTS memory_message_state_insert AFTER INSERT ON message_states BEGIN UPDATE memory_meta SET value=value+1 WHERE key='revision'; END",
+        "CREATE TRIGGER IF NOT EXISTS memory_message_state_update AFTER UPDATE ON message_states BEGIN UPDATE memory_meta SET value=value+1 WHERE key='revision'; END",
+        "CREATE TRIGGER IF NOT EXISTS memory_message_state_delete AFTER DELETE ON message_states BEGIN UPDATE memory_meta SET value=value+1 WHERE key='revision'; END",
+        "CREATE TRIGGER IF NOT EXISTS memory_source_turn_delete AFTER DELETE ON turns BEGIN UPDATE memory_meta SET value=value+1 WHERE key='revision'; END",
+        "CREATE TRIGGER IF NOT EXISTS memory_source_event_delete AFTER DELETE ON events BEGIN UPDATE memory_meta SET value=value+1 WHERE key='revision'; END",
+    )),
+)
+
 
 def _db_user_version(conn: sqlite3.Connection) -> int:
     row = conn.execute("PRAGMA user_version").fetchone()
@@ -1212,6 +1233,10 @@ def _apply_versioned_migrations(conn: sqlite3.Connection, from_version: int) -> 
         conn.execute("BEGIN IMMEDIATE")
         try:
             for stmt in migration.statements:
+                if migration.version == 13 and stmt.startswith("ALTER TABLE notes ADD COLUMN"):
+                    column = stmt.split("ADD COLUMN ", 1)[1].split(" ", 1)[0]
+                    if column in _table_columns(conn, "notes"):
+                        continue
                 conn.execute(stmt)
             conn.execute(
                 "INSERT OR IGNORE INTO schema_migrations(version, name, checksum, applied_at) VALUES (?,?,?,?)",
