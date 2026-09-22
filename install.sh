@@ -37,22 +37,54 @@ PID_FILE="$INSTALL_DIR/hushclaw.pid"
 LOG_FILE="$INSTALL_DIR/hushclaw.log"
 
 # ── Terminal colours ──────────────────────────────────────────────────────────
-if [[ -t 1 ]]; then
+if [[ -t 1 && -z "${NO_COLOR:-}" && "${TERM:-}" != "dumb" ]]; then
   RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
   BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 else
   RED=''; GREEN=''; YELLOW=''; BLUE=''; CYAN=''; BOLD=''; NC=''
 fi
 
-info()    { echo -e "${CYAN}  ▸${NC}  $*"; }
-ok()      { echo -e "${GREEN}  ✓${NC}  $*"; }
-warn()    { echo -e "${YELLOW}  !${NC}  $*"; }
-error()   { echo -e "${RED}  ✗${NC}  $*" >&2; }
+STEP_NUMBER=0
+INSTALL_STARTED=$SECONDS
+SERVICE_RESTORE_KIND="${HUSHCLAW_INSTALL_RESTORE_KIND:-}"
+INSTALL_LOG=""
+
+info()    { printf '%b\n' "    ${CYAN}·${NC} $*"; }
+ok()      { printf '%b\n' "    ${GREEN}✓${NC} $*"; }
+warn()    { printf '%b\n' "    ${YELLOW}!${NC} $*"; }
+error()   { printf '%b\n' "    ${RED}×${NC} $*" >&2; }
 die()     { error "$*"; exit 1; }
-section() { echo -e "\n${BOLD}${BLUE}══ $* ${NC}"; }
-detail()  { echo -e "${BLUE}    ·${NC}  $*"; }
-detail_ok() { echo -e "${GREEN}    ✓${NC}  $*"; }
-detail_warn() { echo -e "${YELLOW}    !${NC}  $*"; }
+section() {
+  STEP_NUMBER=$((STEP_NUMBER + 1))
+  printf '\n%b%02d  %s%b\n' "$BOLD" "$STEP_NUMBER" "$*" "$NC"
+}
+detail()  { printf '%b\n' "      ${BLUE}·${NC} $*"; }
+detail_ok() { printf '%b\n' "      ${GREEN}✓${NC} $*"; }
+detail_warn() { printf '%b\n' "      ${YELLOW}!${NC} $*"; }
+
+run_step() {
+  local label="$1" started=$SECONDS result
+  shift
+  info "${label}…"
+  if "$@" >> "$INSTALL_LOG" 2>&1; then
+    ok "$label ($((SECONDS - started))s)"
+  else
+    result=$?
+    error "$label failed (exit $result)"
+    tail -12 "$INSTALL_LOG" >&2 || true
+    error "Details: $INSTALL_LOG"
+    return "$result"
+  fi
+}
+
+restart_installer() {
+  # Bash 3.2 treats an empty array as unset under `set -u`.
+  if [[ ${#ORIGINAL_ARGS[@]} -gt 0 ]]; then
+    exec bash "$_REPO_INSTALLER" "${ORIGINAL_ARGS[@]}"
+  else
+    exec bash "$_REPO_INSTALLER"
+  fi
+}
 
 render_structured_line() {
   local line="$1"
@@ -67,10 +99,9 @@ render_structured_line() {
 
 render_skill_sync_line() {
   local line="$1"
+  printf '%s\n' "$line" >> "$INSTALL_LOG"
   case "$line" in
-    "[installed]"*) detail_ok "Installed ${line#"[installed] "}" ;;
-    "[updated]"*) detail_ok "Updated ${line#"[updated] "}" ;;
-    "[forced_updated]"*) detail_warn "Replaced ${line#"[forced_updated] "}" ;;
+    "[installed]"*|"[updated]"*|"[forced_updated]"*) : ;;
     "[skipped_dirty]"*) detail_warn "Preserved local copy ${line#"[skipped_dirty] "}" ;;
     "[skipped_error]"*) detail_warn "Skipped ${line#"[skipped_error] "}" ;;
     summary\ *) detail "Summary: ${line#summary }" ;;
@@ -144,62 +175,135 @@ if [ "$SKILL_POLICY_EXPLICIT" = "false" ]; then
   fi
 fi
 
+# ── OS detection ──────────────────────────────────────────────────────────────
+OS="$(uname -s)"
+ARCH="$(uname -m)"
+case "$OS" in
+  Darwin)  OS_NAME="macOS" ;;
+  Linux)   OS_NAME="Linux" ;;
+  *)       die "Unsupported OS: $OS. Use install.ps1 for Windows." ;;
+esac
+
 # ── Process management helpers ────────────────────────────────────────────────
 
-find_running_pid() {
-  # 1. Check PID file first, verify process is alive
-  if [[ -f "$PID_FILE" ]]; then
-    local pid
-    pid=$(cat "$PID_FILE")
-    if kill -0 "$pid" 2>/dev/null; then
-      echo "$pid"
-      return
-    fi
-    rm -f "$PID_FILE"   # stale PID file
+is_hushclaw_pid() {
+  local pid="$1" command_line
+  [[ "$pid" =~ ^[0-9]+$ && "$pid" -gt 1 && "$pid" != "$$" && "$pid" != "$PPID" ]] || return 1
+  command_line=$(ps -p "$pid" -o command= 2>/dev/null) || return 1
+  # Never treat a shell command mentioning HushClaw as the actual server.
+  [[ "$command_line" != *" -c "* ]] || return 1
+  [[ "$command_line" =~ (^|[[:space:]/])hushclaw[[:space:]]+serve([[:space:]]|$) ]]
+}
+
+port_listener_pids() {
+  if command -v lsof &>/dev/null; then
+    lsof -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null || true
+  elif [[ "${OS_NAME:-}" != "macOS" ]] && command -v fuser &>/dev/null; then
+    fuser -n tcp "$PORT" 2>/dev/null || true
   fi
-  # 2. Fallback: scan common command-line shapes (handles cross-script restarts)
-  local pattern pid=""
-  for pattern in \
-    "hushclaw serve" \
-    "hushclaw.*serve" \
-    "python.*hushclaw.*serve"; do
-    pid=$(pgrep -f "$pattern" 2>/dev/null | head -1 || true)
-    if [[ -n "$pid" ]]; then
-      echo "$pid"
-      return
+  return 0
+}
+
+find_running_pid() {
+  local pid
+  if [[ -f "$PID_FILE" ]]; then
+    pid=$(cat "$PID_FILE")
+    if is_hushclaw_pid "$pid"; then printf '%s\n' "$pid"; return; fi
+  fi
+  for pid in $(port_listener_pids); do
+    if is_hushclaw_pid "$pid"; then printf '%s\n' "$pid"; return; fi
+  done
+  return 0
+}
+
+check_port_owner() {
+  local pid
+  for pid in $(port_listener_pids); do
+    if ! is_hushclaw_pid "$pid"; then
+      die "Port $PORT is used by another application (PID $pid). It has not been stopped.\n    Stop that application, or rerun with HUSHCLAW_PORT set to a free port."
     fi
   done
-
-  # 3. Final fallback: detect whichever process is actively listening on the
-  # configured HushClaw port. This covers packaged installs where the process
-  # name shows up as plain "Python" rather than "hushclaw serve".
-  if command -v lsof &>/dev/null; then
-    pid=$(lsof -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null | head -1 || true)
-    if [[ -n "$pid" ]]; then
-      echo "$pid"
-      return
-    fi
-  fi
-  # fuser -n tcp is Linux-only; macOS fuser has different syntax and always
-  # has lsof available, so skip this block on macOS to avoid garbage output.
-  if [[ "${OS_NAME:-}" != "macOS" ]] && command -v fuser &>/dev/null; then
-    pid=$(fuser -n tcp "$PORT" 2>/dev/null | awk '{print $1}' || true)
-    if [[ -n "$pid" ]]; then
-      echo "$pid"
-      return
-    fi
-  fi
 }
+
+wait_for_server() {
+  local attempts="${1:-30}" response count=0
+  response=$(mktemp "${TMPDIR:-/tmp}/hushclaw-ready.XXXXXX") || return 1
+  while [[ "$count" -lt "$attempts" ]]; do
+    if curl --noproxy '*' -fsS --connect-timeout 1 --max-time 2 \
+        "http://127.0.0.1:${PORT}/personal" -o "$response" 2>/dev/null \
+        && grep -q 'id="panel-chat"' "$response"; then
+      rm -f "$response"
+      return 0
+    fi
+    count=$((count + 1))
+    sleep 1
+  done
+  rm -f "$response"
+  return 1
+}
+
+stop_for_install() {
+  local pid
+  pid=$(find_running_pid)
+  [[ -n "$pid" ]] || return 0
+  SERVICE_RESTORE_KIND="nohup"
+  if [[ "$OS_NAME" == "macOS" ]] && launchctl print "gui/$(id -u)/com.hushclaw.server" >/dev/null 2>&1; then
+    SERVICE_RESTORE_KIND="launchd"
+  elif [[ "$OS_NAME" == "Linux" ]] && command -v systemctl >/dev/null 2>&1; then
+    if [[ "$(id -u)" -eq 0 ]] && systemctl is-active --quiet hushclaw; then
+      SERVICE_RESTORE_KIND="system"
+    elif systemctl --user is-active --quiet hushclaw; then
+      SERVICE_RESTORE_KIND="user"
+    fi
+  fi
+  export HUSHCLAW_INSTALL_RESTORE_KIND="$SERVICE_RESTORE_KIND"
+  info "Stopping HushClaw briefly to apply the update…"
+  stop_server "$pid"
+}
+
+restore_service_on_error() {
+  local result=$?
+  [[ "$result" -ne 0 ]] || return 0
+  trap - EXIT
+  set +e
+  error "Setup interrupted. No installation success has been reported."
+  [[ -z "$INSTALL_LOG" ]] || info "Installation details: $INSTALL_LOG"
+  if [[ -n "$SERVICE_RESTORE_KIND" ]]; then
+    warn "Attempting to restart the previously running HushClaw service…"
+    case "$SERVICE_RESTORE_KIND" in
+      launchd) launchctl load "$HOME/Library/LaunchAgents/com.hushclaw.server.plist" ;;
+      system) systemctl start hushclaw ;;
+      user) systemctl --user start hushclaw ;;
+      nohup)
+        if [[ -z "$(port_listener_pids)" && -x "$INSTALL_DIR/venv/bin/hushclaw" ]]; then
+          nohup "$INSTALL_DIR/venv/bin/hushclaw" serve --host "$BIND" --port "$PORT" --distro "$DISTRO" >> "$LOG_FILE" 2>&1 &
+          echo "$!" > "$PID_FILE"
+        fi
+        ;;
+    esac
+    if wait_for_server 10; then
+      ok "HushClaw is reachable again. The update itself did not complete."
+    else
+      warn "Automatic recovery did not succeed. Server log: $LOG_FILE"
+      warn "After fixing the error, run: bash install.sh --start-only"
+    fi
+  fi
+  exit "$result"
+}
+trap restore_service_on_error EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 stop_server() {
   local pid="$1"
+  is_hushclaw_pid "$pid" || die "Refusing to stop PID $pid: it is not a HushClaw server."
 
   # macOS: unload LaunchAgent first (prevents KeepAlive from re-launching)
   if [[ "${OS_NAME:-}" == "macOS" ]]; then
     local plist="$HOME/Library/LaunchAgents/com.hushclaw.server.plist"
-    if [[ -f "$plist" ]]; then
+    if [[ -f "$plist" ]] && launchctl print "gui/$(id -u)/com.hushclaw.server" >/dev/null 2>&1; then
       info "Unloading HushClaw LaunchAgent…"
-      launchctl unload "$plist" 2>/dev/null || true
+      launchctl unload "$plist"
       ok "LaunchAgent unloaded"
       rm -f "$PID_FILE"
       return
@@ -210,13 +314,13 @@ stop_server() {
   if [[ "${OS_NAME:-}" == "Linux" ]] && command -v systemctl &>/dev/null; then
     if [[ "$(id -u)" -eq 0 ]] && systemctl is-active --quiet hushclaw 2>/dev/null; then
       info "Stopping HushClaw via systemctl…"
-      systemctl stop hushclaw 2>/dev/null || true
+      systemctl stop hushclaw
       ok "Server stopped"
       rm -f "$PID_FILE"
       return
     elif systemctl --user is-active --quiet hushclaw 2>/dev/null; then
       info "Stopping HushClaw via systemctl --user…"
-      systemctl --user stop hushclaw 2>/dev/null || true
+      systemctl --user stop hushclaw
       ok "Server stopped"
       rm -f "$PID_FILE"
       return
@@ -327,7 +431,7 @@ if [[ "$MODE" == "uninstall" ]]; then
       echo ""
       printf "  Delete data too? This is permanent. [y/N] "
       read -r _ans
-      if [[ "${_ans,,}" == "y" ]]; then
+      if [[ "$_ans" == "y" || "$_ans" == "Y" ]]; then
         rm -rf "$_DATA_DIR"
         ok "Removed data directory: $_DATA_DIR"
       else
@@ -345,31 +449,13 @@ if [[ "$MODE" == "uninstall" ]]; then
   exit 0
 fi
 
-# ── Banner ────────────────────────────────────────────────────────────────────
-echo -e "${BOLD}${CYAN}"
-cat <<'EOF'
-    __  __           __    ________
-   / / / /_  _______/ /_  / ____/ /___ __      __
-  / /_/ / / / / ___/ __ \/ /   / / __ `/ | /| / /
- / __  / /_/ (__  ) / / / /___/ / /_/ /| |/ |/ /
-/_/ /_/\__,_/____/_/ /_/\____/_/\__,_/ |__/|__/
-EOF
-echo -e "${NC}"
-echo -e "  ${BOLD}Lightweight AI Agent Framework with Persistent Memory${NC}"
-echo -e ""
-echo -e "  ${BLUE}───────────────────────────────────────────────────────${NC}"
-echo -e "  ${CYAN}https://github.com/CNTWDev/hushclaw${NC}  ${BLUE}·${NC}  tuanweishi@gmail.com"
-echo -e "  ${BLUE}───────────────────────────────────────────────────────${NC}"
-echo -e ""
+# ── Setup identity ─────────────────────────────────────────────────────────────
+printf '\n%b  HushClaw%b  /  Setup\n' "$BOLD$CYAN" "$NC"
+printf '  Local-first. Many models. One personal memory.\n\n'
+mkdir -p "$INSTALL_DIR/logs"
+INSTALL_LOG=$(mktemp "$INSTALL_DIR/logs/install-$(date +%Y%m%d-%H%M%S).XXXXXX")
+info "Installation log: $INSTALL_LOG"
 
-# ── OS detection ──────────────────────────────────────────────────────────────
-OS="$(uname -s)"
-ARCH="$(uname -m)"
-case "$OS" in
-  Darwin)  OS_NAME="macOS" ;;
-  Linux)   OS_NAME="Linux" ;;
-  *)       die "Unsupported OS: $OS. Use install.ps1 for Windows." ;;
-esac
 info "Platform: ${BOLD}$OS_NAME${NC} ($ARCH)"
 
 # ── Linux: show distro info ───────────────────────────────────────────────────
@@ -490,37 +576,59 @@ is_headless() {
 
 # ── Helpers: auto-install dependencies ────────────────────────────────────────
 
-# macOS: ensure Homebrew is present (installs silently if missing)
-# Returns 0 on success, 1 if install failed (e.g. no sudo) — caller decides what to do.
-ensure_homebrew() {
-  if command -v brew &>/dev/null; then
-    ok "Homebrew $(brew --version 2>/dev/null | head -1)"
-    return 0
-  fi
-  info "Homebrew not found — attempting install (requires admin rights)…"
-  if ! NONINTERACTIVE=1 /bin/bash -c \
-      "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
-      </dev/null 2>&1; then
-    warn "Homebrew install failed (no sudo access?). Will try to continue without it."
-    return 1
-  fi
-  # Activate brew in the current shell
-  if   [[ -x /opt/homebrew/bin/brew ]]; then eval "$(/opt/homebrew/bin/brew shellenv)"
-  elif [[ -x /usr/local/bin/brew    ]]; then eval "$(/usr/local/bin/brew shellenv)"
-  fi
-  ok "Homebrew installed"
-  return 0
+# Discover an existing Homebrew before downloading anything (including shells
+# where brew's shellenv hasn't been added to the profile yet).
+activate_homebrew() {
+  local candidate
+  if command -v brew >/dev/null 2>&1 && brew --version >/dev/null 2>&1; then return 0; fi
+  for candidate in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+    if [[ -x "$candidate" ]] && "$candidate" --version >/dev/null 2>&1; then
+      eval "$("$candidate" shellenv)"
+      return 0
+    fi
+  done
+  return 1
 }
 
-# macOS: install Python via Homebrew
+has_install_terminal() {
+  [[ -t 0 ]] || ( : </dev/tty ) 2>/dev/null
+}
+
+ensure_homebrew() {
+  if activate_homebrew; then
+    ok "Homebrew is ready"
+    return 0
+  fi
+  info "Installing Homebrew, then Python. macOS may request your administrator password."
+  local installer result=0
+  installer=$(mktemp "${TMPDIR:-/tmp}/hushclaw-homebrew.XXXXXX") || return 1
+  if ! curl -fsSL --connect-timeout 15 --max-time 120 \
+      https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh -o "$installer"; then
+    rm -f "$installer"
+    error "Could not download the official Homebrew installer. Check your network and rerun setup."
+    return 1
+  fi
+  if [[ -z "${NONINTERACTIVE:-}" ]] && has_install_terminal; then
+    # Keep password / confirmation prompts on the terminal even for curl | bash.
+    /bin/bash "$installer" </dev/tty || result=$?
+  else
+    info "No interactive terminal: Homebrew requires existing passwordless administrator access."
+    NONINTERACTIVE=1 /bin/bash "$installer" </dev/null || result=$?
+  fi
+  rm -f "$installer"
+  if [[ "$result" -ne 0 ]] || ! activate_homebrew; then
+    error "Homebrew setup did not complete. Rerun in Terminal with administrator access, or install Python 3.11+ from python.org."
+    return 1
+  fi
+  ok "Homebrew is ready"
+}
+
 install_python_macos() {
-  info "Installing Python 3.13 via Homebrew…"
-  brew install python@3.13 --quiet
-  # Homebrew Python is keg-only; add to PATH explicitly
+  run_step "Install Python 3.13" brew install python@3.13 || return 1
   local brew_python
-  brew_python="$(brew --prefix python@3.13 2>/dev/null)/bin"
+  brew_python="$(brew --prefix python@3.13)/bin" || return 1
   export PATH="$brew_python:$PATH"
-  ok "Python 3.13 installed"
+  hash -r
 }
 
 # Linux: install Python via the detected package manager
@@ -575,7 +683,8 @@ install_python_linux() {
 # macOS: install Git via Homebrew
 install_git_macos() {
   info "Installing Git via Homebrew…"
-  brew install git --quiet
+  ensure_homebrew || die "Homebrew is required to install Git automatically."
+  run_step "Install Git" brew install git
   ok "Git installed"
 }
 
@@ -720,7 +829,7 @@ find_python() {
       cmd="$PYTHON_OVERRIDE"
       major=$("$cmd" -c 'import sys; print(sys.version_info.major)' 2>/dev/null) || major=""
       minor=$("$cmd" -c 'import sys; print(sys.version_info.minor)' 2>/dev/null) || minor=""
-      if [[ "$major" -ge 3 && "$minor" -ge 11 ]]; then
+      if [[ "$major" -eq 3 && "$minor" -ge 11 ]] && "$cmd" -c 'import xml.parsers.expat, ssl, hashlib, venv' >/dev/null 2>&1; then
         PYTHON="$cmd"
         ok "Using HUSHCLAW_PYTHON override: $cmd ($("$cmd" --version 2>&1 | awk '{print $2}'))"
         return 0
@@ -736,7 +845,7 @@ find_python() {
     command -v "$cmd" &>/dev/null || continue
     major=$("$cmd" -c 'import sys; print(sys.version_info.major)' 2>/dev/null) || continue
     minor=$("$cmd" -c 'import sys; print(sys.version_info.minor)' 2>/dev/null) || continue
-    if [[ "$major" -ge 3 && "$minor" -ge 11 ]]; then
+    if [[ "$major" -eq 3 && "$minor" -ge 11 ]] && "$cmd" -c 'import xml.parsers.expat, ssl, hashlib, venv' >/dev/null 2>&1; then
       PYTHON="$cmd"
       ok "Found Python $("$cmd" --version 2>&1 | awk '{print $2}') at $(command -v "$cmd")"
       return 0
@@ -770,7 +879,7 @@ find_python() {
         [[ -x "$candidate" ]] || continue
         major=$("$candidate" -c 'import sys; print(sys.version_info.major)' 2>/dev/null) || continue
         minor=$("$candidate" -c 'import sys; print(sys.version_info.minor)' 2>/dev/null) || continue
-        if [[ "$major" -ge 3 && "$minor" -ge 11 ]]; then
+        if [[ "$major" -eq 3 && "$minor" -ge 11 ]]; then
           # Sanity-check stdlib integrity — a broken Homebrew Python can have
           # version info intact while native extensions (e.g. pyexpat) are
           # linked against a newer libexpat than the system provides.
@@ -800,7 +909,7 @@ find_python() {
 # On macOS we check for an existing Python first; Homebrew is only installed
 # when Python is actually missing.  This lets users without sudo admin rights
 # complete the install if Python is already present (e.g. from python.org).
-section "Checking Python"
+section "Environment · Python"
 
 PYTHON=""
 find_python || true   # sets PYTHON if found; 'true' prevents -e from firing
@@ -832,7 +941,7 @@ if [[ -z "$PYTHON" ]]; then
         [[ -x "$cmd" ]] || continue
         major=$("$cmd" -c 'import sys; print(sys.version_info.major)' 2>/dev/null) || continue
         minor=$("$cmd" -c 'import sys; print(sys.version_info.minor)' 2>/dev/null) || continue
-        if [[ "$major" -ge 3 && "$minor" -ge 11 ]]; then
+        if [[ "$major" -eq 3 && "$minor" -ge 11 ]]; then
           PYTHON="$cmd"
           ok "Using Python $("$cmd" --version 2>&1 | awk '{print $2}') at $cmd"
           break
@@ -844,9 +953,9 @@ if [[ -z "$PYTHON" ]]; then
 fi
 
 # ── Step 2: Git ───────────────────────────────────────────────────────────────
-section "Checking Git"
+section "Environment · Git"
 
-if command -v git &>/dev/null; then
+if command -v git &>/dev/null && git --version >/dev/null 2>&1; then
   ok "Git $(git --version | awk '{print $3}')"
 else
   warn "Git not found — installing automatically…"
@@ -859,18 +968,21 @@ else
   ok "Git $(git --version | awk '{print $3}')"
 fi
 
+if [[ "$OS_NAME" == "Linux" ]]; then ensure_curl_linux; fi
+
 # ── Process Check ─────────────────────────────────────────────────────────────
-section "Process Check"
+section "Service · Preflight"
 mkdir -p "$INSTALL_DIR"
+check_port_owner
 RUNNING_PID=$(find_running_pid)
 if [[ -n "$RUNNING_PID" ]]; then
   if [[ "$MODE" == "start" ]]; then
     warn "HushClaw is already running (PID $RUNNING_PID)."
-    ok "Server is up — nothing to do."
+    wait_for_server 5 || die "The process is running but the web page is not ready. Check: $LOG_FILE"
+    ok "Server is reachable — nothing to do."
     exit 0
   else
-    info "Stopping running server (PID $RUNNING_PID) before ${MODE}…"
-    stop_server "$RUNNING_PID"
+    info "HushClaw is running (PID $RUNNING_PID); keeping it available while fetching the update."
   fi
 else
   ok "No running HushClaw instance detected"
@@ -905,14 +1017,15 @@ else
         fi
       fi
       info "Updating repository…"
-      (cd "$INSTALL_DIR/repo" && git fetch --quiet origin)
+      run_step "Fetch latest release" git -C "$INSTALL_DIR/repo" fetch --quiet origin
+      stop_for_install
       (cd "$INSTALL_DIR/repo" && git reset --hard origin/main --quiet 2>/dev/null \
         || git reset --hard origin/master --quiet)
       ok "Repository updated"
     fi
   else
     info "Cloning repository…"
-    git clone --depth=1 "$REPO_URL" "$INSTALL_DIR/repo" --quiet
+    run_step "Download HushClaw" git clone --depth=1 "$REPO_URL" "$INSTALL_DIR/repo" --quiet
     ok "Repository cloned"
   fi
 
@@ -924,9 +1037,10 @@ else
   _REPO_REAL="$(realpath "$_REPO_INSTALLER" 2>/dev/null || echo "$_REPO_INSTALLER")"
   if [[ -f "$_REPO_INSTALLER" && "$_SELF_REAL" != "$_REPO_REAL" ]]; then
     info "Restarting with updated install.sh from repository…"
-    exec bash "$_REPO_INSTALLER" "${ORIGINAL_ARGS[@]}"
+    restart_installer
   fi
 
+  stop_for_install
 
   # Ubuntu/Debian ship python3.X without venv support by default; the
   # -venv package must be installed separately even for the system Python.
@@ -993,10 +1107,10 @@ Then re-run this installer."
   fi
 
   info "Installing/upgrading packages…"
-  "$INSTALL_DIR/venv/bin/pip" install --upgrade pip --quiet
-  "$INSTALL_DIR/venv/bin/pip" install -e "$INSTALL_DIR/repo[server,calendar,encryption]" --quiet
+  run_step "Prepare package installer" "$INSTALL_DIR/venv/bin/pip" install --upgrade pip --quiet
+  run_step "Install application dependencies" "$INSTALL_DIR/venv/bin/pip" install -e "$INSTALL_DIR/repo[server,calendar,encryption]" --quiet
   ok "HushClaw installed"
-  write_install_state "${LAST_BACKUP_PATH:-}" "ok"
+  write_install_state "${LAST_BACKUP_PATH:-}" "preparing"
 
   # ── Canonical DB schema migration ─────────────────────────────────────────
   # The application owns the migration ledger, backup, integrity checks, and
@@ -1583,59 +1697,16 @@ if [[ "$OS_NAME" == "Linux" ]]; then
   open_firewall_port "$PORT"
 fi
 
-# ── Network info ──────────────────────────────────────────────────────────────
-section "Network Addresses"
-
-# Ensure curl is available for public IP fetch (Linux)
-if [[ "$OS_NAME" == "Linux" ]]; then
-  ensure_curl_linux
-fi
-
-# Local LAN IP
-LOCAL_IP=""
-if [[ "$OS_NAME" == "macOS" ]]; then
-  for iface in en0 en1 en2 utun0; do
-    ip=$(ipconfig getifaddr "$iface" 2>/dev/null || true)
-    if [[ -n "$ip" && "$ip" != "127."* ]]; then
-      LOCAL_IP="$ip"; break
-    fi
-  done
-else
-  # Try multiple methods in order of reliability
-  LOCAL_IP=$(
-    ip -4 route get 1.1.1.1 2>/dev/null \
-      | awk '/src/{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}' \
-    || ip -4 addr show scope global 2>/dev/null \
-      | awk '/inet /{split($2,a,"/"); print a[1]; exit}' \
-    || hostname -I 2>/dev/null | awk '{print $1}' \
-    || true
-  )
-fi
-
-# Public IP (best-effort, non-blocking)
-PUBLIC_IP=""
-if command -v curl &>/dev/null; then
-  PUBLIC_IP=$(curl -s --connect-timeout 4 https://api.ipify.org 2>/dev/null || true)
-fi
-
-echo ""
-WEB_PATH="$(web_path_for_distro "$DISTRO")"
-echo -e "  ${BOLD}${GREEN}●  Local (this machine)${NC}"
-echo -e "     ${CYAN}http://127.0.0.1:${PORT}${WEB_PATH}${NC}"
-if [[ -n "$LOCAL_IP" ]]; then
-  echo ""
-  echo -e "  ${BOLD}${GREEN}●  LAN (same network)${NC}"
-  echo -e "     ${CYAN}http://${LOCAL_IP}:${PORT}${WEB_PATH}${NC}"
-fi
-if [[ -n "$PUBLIC_IP" ]]; then
-  echo ""
-  echo -e "  ${BOLD}${YELLOW}●  Internet (public IP — only if port $PORT is open in firewall)${NC}"
-  echo -e "     ${CYAN}http://${PUBLIC_IP}:${PORT}${WEB_PATH}${NC}"
-fi
-echo ""
-warn "Tip: On first launch the browser opens the ${BOLD}Settings modal${NC} to configure your API key."
-warn "     Use the ${BOLD}⚙ Settings${NC} button at any time to adjust Model, Channels, System, or Memory settings."
-echo ""
+show_install_summary() {
+  printf '\n%b  HushClaw is ready%b  ·  %ss\n' "$BOLD$GREEN" "$NC" "$((SECONDS - INSTALL_STARTED))"
+  printf '  Open      http://127.0.0.1:%s/personal\n' "$PORT"
+  if [[ "$BIND" != "127.0.0.1" && "$BIND" != "localhost" && "$BIND" != "::1" ]]; then
+    printf '  Network   Listening on %s:%s\n' "$BIND" "$PORT"
+  fi
+  printf '  Account   Settings → Sign in to VoxNexus → Choose a model\n'
+  printf '  Logs      %s\n' "$LOG_FILE"
+  printf '  Setup     %s\n\n' "$INSTALL_LOG"
+}
 
 # ── Background launch helpers ─────────────────────────────────────────────────
 
@@ -1789,7 +1860,7 @@ open_browser() {
   if [[ -n "$NO_BROWSER" ]]; then return; fi
   if is_headless; then
     warn "Headless server detected — browser auto-open skipped."
-    warn "Connect from a client machine using the addresses above."
+    info "Connect using this server's address and port $PORT."
     return
   fi
   # Wait briefly for the server to bind
@@ -1804,7 +1875,7 @@ open_browser() {
 }
 
 # ── Start server ──────────────────────────────────────────────────────────────
-section "Starting HushClaw Server"
+section "Service · Start & verify"
 WEB_PATH="$(web_path_for_distro "$DISTRO")"
 LOCAL_WEB_URL="http://127.0.0.1:${PORT}${WEB_PATH}"
 info "Personal WebUI on http://${BIND}:${PORT}${WEB_PATH}"
@@ -1831,8 +1902,16 @@ if [[ "$FOREGROUND" == true ]]; then
     --port "$PORT" \
     --distro "$DISTRO"
 else
+  check_port_owner
   start_background
+  if ! wait_for_server; then
+    die "HushClaw did not become ready. Check the server log: $LOG_FILE"
+  fi
+  SERVICE_RESTORE_KIND=""
+  unset HUSHCLAW_INSTALL_RESTORE_KIND
+  write_install_state "${LAST_BACKUP_PATH:-}" "ok"
+  show_install_summary
   # Open browser after background server starts
   open_browser "$LOCAL_WEB_URL" &
-  ok "Installation complete. HushClaw is running in the background."
+  ok "Background service is running and the web page is reachable."
 fi

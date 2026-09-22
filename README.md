@@ -100,7 +100,9 @@ bash <(curl -fsSL https://raw.githubusercontent.com/CNTWDev/hushclaw/master/inst
 irm https://raw.githubusercontent.com/CNTWDev/hushclaw/master/install.ps1 | iex
 ```
 
-安装程序会准备 Python 环境、安装运行依赖、初始化本地数据库并启动服务。日常使用无需 npm 构建，也无需 Docker。
+安装程序会准备 Python 环境、安装运行依赖、初始化本地数据库并启动服务。macOS 缺少 Python 3.11+ 时，会自动检查并安装 Homebrew，再安装 Python；首次安装 Homebrew 时，请按终端提示完成管理员授权。已有可用 Python 时会直接复用。日常使用无需 npm 构建，也无需 Docker。
+
+安装进度按阶段展示，依赖安装详情保存在 `~/.hushclaw/logs/`。遇到其他程序占用端口时不会误停它；升级失败会尝试恢复原先运行的服务。详见[安装与故障恢复](docs/installer.md)。
 
 1. 打开 [本地工作空间](http://localhost:8765/personal)。
 2. 进入 **Settings → 个人中心**，通过系统浏览器登录 VoxNexus。
