@@ -23,7 +23,7 @@ from hushclaw.memory.encryption import (
     get_sqlcipher_driver,
 )
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 DB_NAME = "memory.db"
 DB_SIDE_CARS = (DB_NAME, f"{DB_NAME}-wal", f"{DB_NAME}-shm")
 APPLICATION_ID = 0x4853434C  # "HSCL"; identifies HushClaw-owned SQLite files.
@@ -1205,6 +1205,28 @@ _VERSIONED_MIGRATIONS += (
         "CREATE TRIGGER IF NOT EXISTS memory_message_state_delete AFTER DELETE ON message_states BEGIN UPDATE memory_meta SET value=value+1 WHERE key='revision'; END",
         "CREATE TRIGGER IF NOT EXISTS memory_source_turn_delete AFTER DELETE ON turns BEGIN UPDATE memory_meta SET value=value+1 WHERE key='revision'; END",
         "CREATE TRIGGER IF NOT EXISTS memory_source_event_delete AFTER DELETE ON events BEGIN UPDATE memory_meta SET value=value+1 WHERE key='revision'; END",
+    )),
+)
+
+
+_VERSIONED_MIGRATIONS += (
+    SchemaMigration(version=14, name="personal-eval-cases", statements=(
+        "CREATE TABLE IF NOT EXISTS eval_cases ("
+        " case_id TEXT PRIMARY KEY, kind TEXT NOT NULL, session_id TEXT NOT NULL DEFAULT '',"
+        " source_message_id TEXT NOT NULL, prompt_message_id TEXT NOT NULL DEFAULT '',"
+        " response_message_id TEXT NOT NULL DEFAULT '',"
+        " task_fingerprint TEXT NOT NULL DEFAULT '', prompt TEXT NOT NULL, response TEXT NOT NULL DEFAULT '',"
+        " expectation TEXT NOT NULL DEFAULT '', skills_json TEXT NOT NULL DEFAULT '[]',"
+        " status TEXT NOT NULL DEFAULT 'active', created INTEGER NOT NULL, updated INTEGER NOT NULL)",
+        "CREATE INDEX IF NOT EXISTS eval_cases_status ON eval_cases(status, kind, created)",
+        "CREATE INDEX IF NOT EXISTS eval_cases_source ON eval_cases(source_message_id)",
+        "CREATE INDEX IF NOT EXISTS eval_cases_prompt_source ON eval_cases(prompt_message_id)",
+        "CREATE INDEX IF NOT EXISTS eval_cases_response_source ON eval_cases(response_message_id)",
+        "CREATE TABLE IF NOT EXISTS eval_runs ("
+        " run_id INTEGER PRIMARY KEY AUTOINCREMENT, case_id TEXT NOT NULL, batch_id TEXT NOT NULL DEFAULT '',"
+        " passed INTEGER NOT NULL, reason TEXT NOT NULL DEFAULT '', response TEXT NOT NULL DEFAULT '',"
+        " created INTEGER NOT NULL)",
+        "CREATE INDEX IF NOT EXISTS eval_runs_case ON eval_runs(case_id, created)",
     )),
 )
 

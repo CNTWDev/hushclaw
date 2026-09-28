@@ -26,7 +26,9 @@ Error taxonomy before recovery decisions (`hushclaw/core/errors.py`):
 Graceful degradation: vector search fails → BM25 only; browser unavailable → tools silently absent; trajectory write fails → log + continue. Never surface these to the user.
 
 ### 2. Safety by Design
-- `_confirm_fn=None` blocks all dangerous tools by default (server path). REPL injects an interactive prompt.
+- Tools in `tools.approval_required` (default `run_shell`, `install_skill`) need per-call approval in `ToolRuntime`: REPL `_confirm_fn` prompt → WebUI `approval_request` dialog via the session entry → otherwise allowed only for channels in `tools.unattended_allow_channels` (scheduler, background tasks, local CLI). Inbound automation (`app_inbound:*`) and chat connectors are denied unless the owner opts in.
+- The server rejects browser Origins that are not loopback / `public_base_url` / `server.allowed_origins`, and non-loopback Host headers when bound to loopback (DNS rebinding). Never reintroduce `Access-Control-Allow-Origin: *` (`server/origin_guard.py`).
+- Third-party text (tool results, inbound messages) goes through `wrap_untrusted_context`, which defangs wrapper markers inside the content.
 - Subagent depth cap: parent (0) → child (1); children cannot re-delegate.
 - SSRF protection in `fetch_url`: RFC 1918, loopback, link-local, cloud metadata IPs blocked before any socket opens (`tools/builtins/web_tools.py`).
 - Skill sandboxing is **partial** — pip installs run unaudited in the same venv.
@@ -69,6 +71,7 @@ project it into `run_metrics` for diagnostics; `events` remains authoritative.
 ### 6. User Modeling & Learning
 - `USER.md` — user profile (communication style, workflow, recurring goals). Injected into `dynamic_suffix`, distinct from `MEMORY.md` (world facts).
 - Learning loop (`learning/controller.py`): captures tool traces per turn, runs `reflect_trace()`, persists to `reflections` + `skill_outcomes` tables. Quality score derived from trace: corrections → 0.0, errors → 0.6, clean → 1.0. Auto-patches single editable skills on strong signals.
+- Corrections are attributed to the *previous* turn (`learning/corrections.py` pre-filter → cheap-model classifier). Explicit ratings/disputes flow through `learning/feedback_bridge.py`. Both write personal regression cases to `eval_cases`; `hushclaw eval run` replays them in deleted `eval:` sessions with read-only tools. Sessions prefixed `eval:` never feed learning.
 - Memory creativity defaults enabled: `memory_decay_rate=0.002` (half-life ~350 days), `retrieval_temperature=0.1`.
 
 ---
@@ -114,7 +117,7 @@ CLI / WebSocket
                  ├─ LLMProvider.complete()     # pluggable, single-method contract
                  ├─ ToolRuntime.execute()      # policy/audit → injection + dispatch
                  ├─ MemoryStore.save_turn()    # SQLite + Markdown persistence
-                 ├─ ContextEngine.after_turn() # regex fact extraction
+                 ├─ ContextEngine.after_turn() # no-op; extraction runs in LearningController
                  └─ LearningController         # trace capture → reflection → skill patch
 ```
 

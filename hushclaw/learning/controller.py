@@ -9,13 +9,16 @@ import time
 from dataclasses import asdict
 from collections import defaultdict
 
+from hushclaw.learning.corrections import looks_like_correction, parse_verdict, strong_correction
 from hushclaw.learning.fingerprint import fingerprint_task
-from hushclaw.learning.reflection import TaskTrace, reflect_trace
+from hushclaw.learning.reflection import ReflectionResult, TaskTrace, reflect_trace
 from hushclaw.memory.kinds import USER_MODEL
 from hushclaw.memory.store import MemoryStore
 from hushclaw.prompts import (
     BELIEF_MODEL_CONSOLIDATION_SYSTEM,
     BELIEF_MODEL_CONSOLIDATION_TEMPLATE,
+    CORRECTION_SYSTEM,
+    CORRECTION_USER_TEMPLATE,
     SESSION_TITLE_SYSTEM,
     SESSION_TITLE_USER_TEMPLATE,
     PROFILE_EXTRACTION_SYSTEM,
@@ -32,6 +35,9 @@ from hushclaw.util.logging import get_logger
 
 log = get_logger("learning")
 _BELIEF_CONSOLIDATION_MIN_INTERVAL = 45.0
+_LAST_TURN_CACHE_LIMIT = 256
+_REFLECTION_NOTE_MAX_LESSONS = 8
+EVAL_SESSION_PREFIX = "eval:"
 
 
 class LearningController:
@@ -52,6 +58,7 @@ class LearningController:
         self._belief_jobs_in_flight: set[tuple[str, ...]] = set()
         self._belief_last_attempt_at: dict[tuple[str, ...], float] = {}
         self._title_jobs_in_flight: set[str] = set()
+        self._last_turn: dict[str, dict] = {}
 
     def on_pre_session_init(self, event) -> None:
         session_id = str(event.payload.get("session_id") or "")
@@ -90,10 +97,15 @@ class LearningController:
         session_id = str(payload.get("session_id") or "")
         if not session_id:
             return
+        if session_id.startswith(EVAL_SESSION_PREFIX):
+            # Regression replays must not teach the assistant about the user.
+            self._pending.pop(session_id, None)
+            return
         user_input = str(payload.get("user_input") or "")
         assistant_response = str(payload.get("assistant_response") or "")
         workspace = str(payload.get("workspace") or "")
         source_message_id = str(payload.get("user_message_id") or payload.get("assistant_message_id") or "")
+        assistant_message_id = str(payload.get("assistant_message_id") or "")
         asyncio.create_task(self._maybe_consolidate_belief_models(
             session_id=session_id,
             user_input=user_input,
@@ -129,7 +141,10 @@ class LearningController:
             turn_count=1,
             task_fingerprint=task_fp,
             source_message_id=source_message_id,
+            assistant_message_id=assistant_message_id,
+            previous_turn=self._previous_turn(session_id),
         )
+        self._remember_turn(trace)
         if isinstance(self.memory, MemoryStore):
             payload = json.dumps({'trace': asdict(trace), 'reflect': self.should_reflect(trace)}, ensure_ascii=False)
             job_id = source_message_id or f'{session_id}:{time.time_ns()}'
@@ -141,6 +156,134 @@ class LearningController:
             asyncio.create_task(self._run_all_learning(trace))
             return
         asyncio.create_task(self._run_all_learning(trace, do_reflect=True))
+
+    def _previous_turn(self, session_id: str) -> dict:
+        cached = self._last_turn.get(session_id)
+        if cached is not None:
+            return dict(cached)
+        if not isinstance(self.memory, MemoryStore):
+            return {}
+        # After a restart, fall back to the last queued learning job.
+        try:
+            row = self.memory.conn.execute(
+                "SELECT payload FROM learning_jobs WHERE json_extract(payload, '$.trace.session_id')=? "
+                "ORDER BY rowid DESC LIMIT 1",
+                (session_id,),
+            ).fetchone()
+            if row is None:
+                return {}
+            prev = json.loads(row[0]).get("trace") or {}
+        except Exception:
+            return {}
+        return {
+            "user_input": str(prev.get("user_input") or "")[:1500],
+            "assistant_response": str(prev.get("assistant_response") or "")[:2000],
+            "task_fingerprint": str(prev.get("task_fingerprint") or ""),
+            "used_skills": list(prev.get("used_skills") or []),
+            "user_message_id": str(prev.get("source_message_id") or ""),
+            "assistant_message_id": str(prev.get("assistant_message_id") or ""),
+        }
+
+    def _remember_turn(self, trace: TaskTrace) -> None:
+        self._last_turn.pop(trace.session_id, None)
+        self._last_turn[trace.session_id] = {
+            "user_input": (trace.user_input or "")[:1500],
+            "assistant_response": (trace.assistant_response or "")[:2000],
+            "task_fingerprint": trace.task_fingerprint,
+            "used_skills": list(trace.used_skills),
+            "user_message_id": trace.source_message_id,
+            "assistant_message_id": trace.assistant_message_id,
+        }
+        while len(self._last_turn) > _LAST_TURN_CACHE_LIMIT:
+            self._last_turn.pop(next(iter(self._last_turn)))
+
+    async def _classify_correction(self, trace: TaskTrace, model: str):
+        prev = trace.previous_turn or {}
+        prompt = CORRECTION_USER_TEMPLATE.format(
+            previous_user_input=str(prev.get("user_input") or "")[:800],
+            previous_answer=str(prev.get("assistant_response") or "")[:1200],
+            user_input=(trace.user_input or "")[:800],
+        )
+        resp = await self.provider.complete(
+            messages=[Message(role="user", content=prompt)],
+            system=CORRECTION_SYSTEM,
+            max_tokens=300,
+            model=model,
+        )
+        return parse_verdict(getattr(resp, "content", "") or "")
+
+    async def _process_correction(self, trace: TaskTrace, model_name: str, use_llm: bool) -> bool:
+        """Attribute a correction in this turn to the previous answer.
+
+        Effects on the corrected turn: a failed reflection, a 0.0 quality score
+        for the skills it used (which can trigger a skill refinement), and a
+        personal regression case. Returns True when a correction was applied.
+        """
+        prev = trace.previous_turn or {}
+        if not prev.get("user_input") or not prev.get("assistant_response"):
+            return False
+        if not looks_like_correction(trace.user_input):
+            return False
+        if not self._source_available(trace):
+            return False
+        what_was_wrong, expected = "", ""
+        if use_llm:
+            try:
+                verdict = await self._classify_correction(trace, model_name)
+            except Exception as exc:
+                log.debug("correction classification failed: %s", exc)
+                verdict = None
+            if verdict is not None:
+                if not verdict.is_correction:
+                    return False
+                what_was_wrong, expected = verdict.what_was_wrong, verdict.expected
+            elif not strong_correction(trace.user_input):
+                return False
+        elif not strong_correction(trace.user_input):
+            return False
+        what_was_wrong = what_was_wrong or (trace.user_input or "").strip()[:300]
+        expected = expected or what_was_wrong
+
+        corrected = TaskTrace(
+            session_id=trace.session_id,
+            user_input=str(prev.get("user_input") or ""),
+            assistant_response=str(prev.get("assistant_response") or ""),
+            corrections=[what_was_wrong],
+            used_skills=list(prev.get("used_skills") or []),
+            workspace=trace.workspace,
+            turn_count=1,
+            task_fingerprint=str(prev.get("task_fingerprint") or "general_assistance"),
+            # The correcting message is the evidence; deleting it undoes this learning.
+            source_message_id=trace.source_message_id,
+            assistant_message_id=str(prev.get("assistant_message_id") or ""),
+        )
+        result = ReflectionResult(
+            success=False,
+            outcome="User corrected the answer.",
+            failure_mode=what_was_wrong,
+            lesson=expected,
+            strategy_hint="",
+        )
+        await self._persist_reflection(corrected, result)
+        eval_cases = getattr(self.memory, "eval_cases", None)
+        if eval_cases is not None and trace.source_message_id:
+            eval_cases.upsert(
+                kind="correction",
+                session_id=trace.session_id,
+                source_message_id=trace.source_message_id,
+                prompt_message_id=str(prev.get("user_message_id") or ""),
+                response_message_id=corrected.assistant_message_id,
+                prompt=corrected.user_input,
+                response=corrected.assistant_response,
+                expectation=f"{expected}\nAvoid: {what_was_wrong}" if expected != what_was_wrong else expected,
+                task_fingerprint=corrected.task_fingerprint,
+                skills=corrected.used_skills,
+            )
+        log.info(
+            "correction recorded session=%s fingerprint=%s skills=%s",
+            trace.session_id[:12], corrected.task_fingerprint, ",".join(corrected.used_skills) or "-",
+        )
+        return True
 
     def _schedule_session_title_generation(self, session_id: str, user_input: str) -> None:
         sid = str(session_id or "").strip()
@@ -219,6 +362,12 @@ class LearningController:
         cheap_model = getattr(self.agent_config, "cheap_model", "") if self.agent_config else ""
         model_name = cheap_model or (getattr(self.agent_config, "model", "") if self.agent_config else "")
         use_llm = bool(model_name and self.provider is not None)
+
+        # 0. Did this message correct the previous answer? Best-effort.
+        try:
+            await self._process_correction(trace, model_name, use_llm)
+        except Exception as exc:
+            log.warning("correction processing failed: %s", exc)
 
         # 1. Profile fact extraction (user profile dimensions)
         if use_llm:
@@ -546,16 +695,7 @@ class LearningController:
                 if strategy:
                     parts.append(f"Strategy: {strategy}")
                 note_title = f"Reflection: {(trace.task_fingerprint or 'general')[:60]}"
-                if not self.memory.note_exists_with_title(note_title):
-                    self.memory.remember(
-                        "\n".join(parts),
-                        title=note_title,
-                        tags=["_reflection", "_auto_extract"],
-                        note_type="fact",
-                        memory_kind=USER_MODEL,
-                        source_message_id=trace.source_message_id,
-                        persist_to_disk=False,
-                    )
+                self._append_reflection_note(note_title, "\n".join(parts), trace.source_message_id)
             for update in (profile_updates or []):
                 self.memory.user_profile.upsert_fact(
                     category=str(update.get("category") or "preferences"),
@@ -582,6 +722,31 @@ class LearningController:
             await self._maybe_auto_patch_skill(trace, result)
         except Exception as e:
             log.warning("reflection persist failed: %s", e)
+
+    def _append_reflection_note(self, title: str, entry: str, source_message_id: str) -> None:
+        """Keep the most recent lessons per task type instead of only the first one.
+
+        Each lesson is its own note so it keeps its own source message: deleting
+        that message removes exactly the lessons it produced.
+        """
+        rows = self.memory.conn.execute(
+            "SELECT n.note_id, b.body FROM notes n JOIN note_bodies b USING(note_id) "
+            "WHERE n.title=? AND n.status='active' ORDER BY n.created DESC, n.rowid DESC",
+            (title,),
+        ).fetchall()
+        if any(str(r["body"] or "").strip() == entry.strip() for r in rows):
+            return
+        self.memory.remember(
+            entry,
+            title=title,
+            tags=["_reflection", "_auto_extract"],
+            note_type="fact",
+            memory_kind=USER_MODEL,
+            source_message_id=source_message_id,
+            persist_to_disk=False,
+        )
+        for stale in rows[_REFLECTION_NOTE_MAX_LESSONS - 1:]:
+            self.memory.delete_note(stale["note_id"])
 
     async def _maybe_consolidate_belief_models(
         self,

@@ -415,6 +415,40 @@ REFLECT_USER_TEMPLATE: str = (
     "Analyze this execution and return a JSON reflection object."
 )
 
+
+CORRECTION_SYSTEM: str = (
+    "You decide whether a user's new message corrects the assistant's previous answer.\n"
+    "A correction says the previous answer was wrong, misunderstood the request, ignored a "
+    "constraint, or was not what the user wanted. A new request, a follow-up question, or "
+    "added detail that the assistant could not have known is NOT a correction.\n"
+    "Return a JSON object only:\n"
+    '{"is_correction": bool, "what_was_wrong": str, "expected": str}\n'
+    "- what_was_wrong: one sentence, in the user's language, naming the mistake.\n"
+    "- expected: one sentence describing what a good answer to the ORIGINAL request must do.\n"
+    "Use empty strings when is_correction is false."
+)
+
+CORRECTION_USER_TEMPLATE: str = (
+    "Original request:\n{previous_user_input}\n\n"
+    "Assistant answer (truncated):\n{previous_answer}\n\n"
+    "User's new message:\n{user_input}"
+)
+
+EVAL_JUDGE_SYSTEM: str = (
+    "You grade an assistant answer against a personal regression case written from the "
+    "user's own past feedback. Judge only whether the new answer meets the expectation and "
+    "avoids the recorded mistake; ignore style unless the expectation mentions it.\n"
+    "Return a JSON object only: {\"passed\": bool, \"reason\": str} with a one-sentence reason."
+)
+
+EVAL_JUDGE_USER_TEMPLATE: str = (
+    "Case kind: {kind}\n"
+    "Request:\n{prompt}\n\n"
+    "Expectation:\n{expectation}\n\n"
+    "Previously judged answer (for reference):\n{previous_response}\n\n"
+    "New answer to grade:\n{response}"
+)
+
 BELIEF_MODEL_CONSOLIDATION_TEMPLATE: str = (
     "You will receive several domain memory buckets. Each bucket contains recent belief/interest entries.\n"
     "For each bucket, return one JSON object with these exact fields:\n"

@@ -7,7 +7,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
-- No unreleased entries yet.
+### Security
+
+- Reject WebSocket and HTTP requests from non-local browser origins and from
+  DNS-rebinding Host headers; the HTTP API echoes allowed origins instead of `*`.
+- `run_shell` and `install_skill` now ask for approval in the WebUI, as they
+  already did in the REPL. Unattended channels are limited to
+  `tools.unattended_allow_channels`; inbound automation and chat connectors
+  can no longer run them without opting in.
+- Inbound app messages are wrapped as untrusted content, and content can no
+  longer close its own untrusted block.
+
+### Learning
+
+- User corrections are detected and attributed to the answer they correct:
+  failed reflection, 0.0 skill quality, and possible skill refinement.
+- Star ratings and disputed passages now score skills and record reflections.
+- Reflection notes keep the latest lessons per task type instead of only the first.
+- New personal regression cases (`eval_cases`, schema v14) and
+  `hushclaw eval list|run` to replay them with read-only tools.
 
 ## [0.6.0] — 2026-08-31  *(Harness v2 kernel)*
 
