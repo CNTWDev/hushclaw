@@ -69,7 +69,8 @@ import {
   handleUpdateStatus, handleUpdateAvailable, handleUpdateProgress, handleUpdateResult,
   handleServerShutdown, refreshUpdateUi, requestCheckUpdate, notifyUpgradeReconnected,
 } from "./updates.js";
-import { t } from "./i18n.js";
+import { t, uiText } from "./i18n.js";
+import { openConfirm } from "./modal.js";
 
 let _activeReplaySessionId = "";
 let _sessionListRefreshTimers = new Map();
@@ -534,8 +535,39 @@ function markEventSessionRunning(data, mode = "thinking", resetTimer = false) {
 
 // ── Message dispatcher ─────────────────────────────────────────────────────
 
+const _answeredApprovals = new Set();
+
+async function handleApprovalRequest(data) {
+  const approvalId = String(data.approval_id || "");
+  if (!approvalId || _answeredApprovals.has(approvalId)) return;
+  // Replayed history may contain old requests; the server has already denied them.
+  if (Number(data.expires_at || 0) && Date.now() > Number(data.expires_at)) return;
+  _answeredApprovals.add(approvalId);
+  const detail = String(data.summary || data.tool || "");
+  const approved = await openConfirm({
+    title: uiText("Allow this action?"),
+    message: `${uiText("The assistant wants to run a sensitive action. Only allow it if you expected it.")}\n\n${detail}`,
+    confirmText: uiText("Allow"),
+    cancelText: uiText("Deny"),
+    closeOnBackdrop: false,
+    dangerConfirm: true,
+  });
+  send({
+    type: "approval_response",
+    session_id: eventSessionId(data) || getCurrentSessionId(),
+    approval_id: approvalId,
+    approved: Boolean(approved),
+  });
+}
+
 export function handleMessage(data) {
   switch (data.type) {
+    case "approval_request":
+      handleApprovalRequest(data);
+      break;
+    case "approval_resolved":
+      _answeredApprovals.add(String(data.approval_id || ""));
+      break;
     case 'message_feedback':
       receiveMessageFeedback(data);
       break;

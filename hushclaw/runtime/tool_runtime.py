@@ -5,8 +5,15 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from hushclaw.runtime.policy import PolicyDecision, PolicyGate
+from hushclaw.runtime.policy import (
+    DEFAULT_APPROVAL_REQUIRED,
+    DEFAULT_UNATTENDED_CHANNELS,
+    PolicyDecision,
+    PolicyGate,
+    approval_summary,
+)
 from hushclaw.runtime.audit import AuditEvent, append_audit_event
+from hushclaw.runtime.principal import current_principal
 from hushclaw.runtime.file_verifier import candidate_paths, should_verify_tool, snapshot, verify_mutation
 from hushclaw.tools.base import ToolResult
 from hushclaw.tools.executor import ToolExecutor
@@ -55,6 +62,60 @@ class ToolRuntime:
         """Keep legacy context mutation working while centralizing storage."""
         self.executor.set_context(**kwargs)
 
+    def _approval_settings(self) -> tuple[set[str], set[str]]:
+        tools_cfg = getattr(getattr(self.runtime_context, "config", None), "tools", None)
+        required = getattr(tools_cfg, "approval_required", None)
+        allowed = getattr(tools_cfg, "unattended_allow_channels", None)
+        return (
+            set(DEFAULT_APPROVAL_REQUIRED if required is None else required),
+            set(DEFAULT_UNATTENDED_CHANNELS if allowed is None else allowed),
+        )
+
+    async def _check_approval(self, td, tool_name: str, arguments: dict[str, Any]) -> str:
+        """Return a denial reason, or "" when the call may proceed.
+
+        Order: the REPL's synchronous confirm prompt, then the WebUI session's
+        approval dialog, then the unattended channel allowlist.
+        """
+        required, unattended = self._approval_settings()
+        if tool_name not in required:
+            return ""
+        summary = approval_summary(tool_name, arguments)
+        confirm_fn = self.runtime_context.get("_confirm_fn")
+        if callable(confirm_fn):
+            if tool_name == "run_shell":
+                return ""  # PolicyGate.check already prompted for this command
+            return "" if confirm_fn(summary) else "Cancelled by user."
+        entry = self.runtime_context.get("_current_session_entry")
+        request_approval = getattr(entry, "request_approval", None)
+        if callable(request_approval):
+            try:
+                approved = await request_approval(tool_name, dict(arguments or {}), summary=summary)
+            except Exception as exc:
+                return f"Approval request failed: {exc}"
+            return "" if approved else (
+                f"The user did not approve {tool_name}. Do not retry it; ask the user how to proceed."
+            )
+        # Prefer the principal of the current run (set per request by callers
+        # such as the scheduler or inbound automation); loops are cached per
+        # session, so the principal captured at loop creation can be stale.
+        run_channel = str(getattr(current_principal(), "source_channel", "") or "")
+        if run_channel and run_channel != "local":
+            channel = run_channel
+        else:
+            principal = self.runtime_context.effective_principal()
+            channel = str(
+                getattr(principal, "source_channel", "")
+                or getattr(self.runtime_context, "source_channel", "")
+                or "local"
+            )
+        if channel in unattended:
+            return ""
+        return (
+            f"{tool_name} requires user approval and channel {channel!r} has no interactive "
+            "approver. The owner can allow it via tools.unattended_allow_channels."
+        )
+
     async def execute(self, call: ToolCall) -> ToolExecutionRecord:
         resolved_name = _TOOL_ALIASES.get(call.name, call.name)
         td = self.executor.registry.get(resolved_name)
@@ -101,6 +162,24 @@ class ToolRuntime:
             return ToolExecutionRecord(
                 call=call,
                 result=ToolResult.error(decision.reason or f"Blocked by runtime policy for tool {call.name!r}"),
+                decision=decision,
+                elapsed_ms=0.0,
+            )
+
+        approval_denial = await self._check_approval(td, resolved_name, call.arguments)
+        if approval_denial:
+            decision = PolicyDecision(allowed=False, reason=approval_denial, requires_confirmation=True)
+            append_audit_event(memory, AuditEvent(
+                event_type="policy_denied",
+                principal=principal,
+                session_id=session_id,
+                resource={"kind": "tool", "id": call.name, "arguments": call.arguments},
+                approval_state="denied",
+                metadata={"reason": approval_denial, "entrypoint": call.entrypoint},
+            ))
+            return ToolExecutionRecord(
+                call=call,
+                result=ToolResult.error(approval_denial),
                 decision=decision,
                 elapsed_ms=0.0,
             )

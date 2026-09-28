@@ -665,5 +665,9 @@ export const UI_MESSAGES = Object.fromEntries([
   ["Loading evidence…", "正在加载依据…"],
   ["Loading events…", "正在加载事件…"],
   ["{n} configured connections", "{n} 个已配置连接"],
-  ["Email", "邮箱"]
+  ["Email", "邮箱"],
+  ["Allow this action?", "允许这个操作吗？"],
+  ["The assistant wants to run a sensitive action. Only allow it if you expected it.", "助手想执行一个敏感操作。只有在你预期到它时才允许。"],
+  ["Allow", "允许"],
+  ["Deny", "拒绝"]
 ].flatMap(([en, zh]) => [[en, { en, zh }], [zh, { en, zh }]]));

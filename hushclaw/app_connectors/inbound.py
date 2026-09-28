@@ -8,6 +8,8 @@ from dataclasses import dataclass
 
 from hushclaw.app_connectors import x as x_connector
 from hushclaw.config.schema import InboundAutomationConfig, InboundAutomationRuleConfig
+from hushclaw.runtime.principal import RuntimePrincipal, principal_context
+from hushclaw.runtime.threat_patterns import wrap_untrusted_context
 from hushclaw.tools.base import ToolResult
 from hushclaw.util.logging import get_logger
 
@@ -311,18 +313,32 @@ class InboundAutomationWorker:
         auto_cfg = self.config.inbound_automation
         prompt = self._build_prompt(event, decision, max_reply_chars=max(32, int(auto_cfg.max_reply_chars or 280)))
         session_id = f"app-inbound:{event.connector_id}:{event.thread_id or event.external_id or event.event_id}"
-        raw = await self.gateway.execute(decision.agent, prompt, session_id=session_id)
+        # Inbound text is written by other people. Run it under its own channel
+        # so approval-gated tools (shell, skill install) are refused.
+        principal = RuntimePrincipal(
+            principal_id="local-user",
+            roles=("owner",),
+            mode="personal",
+            source_channel=f"app_inbound:{event.connector_id}",
+        )
+        with principal_context(principal):
+            raw = await self.gateway.execute(decision.agent, prompt, session_id=session_id)
         text = self._sanitize_reply_text(raw, max_chars=max(32, int(auto_cfg.max_reply_chars or 280)))
         if not text:
             raise RuntimeError("generated empty auto-reply")
         return text
 
     def _build_prompt(self, event: InboundEvent, decision: InboundDecision, *, max_reply_chars: int) -> str:
+        wrapped_body, _scan = wrap_untrusted_context(
+            event.body or event.title,
+            source=f"app_inbound:{event.connector_id}",
+            kind="inbound_message",
+        )
         context = {
             "connector_id": event.connector_id,
             "event_type": event.normalized_event_type,
             "title": event.title,
-            "body": event.body,
+            "body": wrapped_body,
             "source_url": event.source_url,
             "thread_id": event.thread_id,
             "author_external_id": event.author_external_id,
@@ -345,9 +361,8 @@ class InboundAutomationWorker:
             f"- Thread id: {event.thread_id or '(unknown)'}\n"
             f"- Source URL: {event.source_url or '(none)'}\n"
             f"- Matched rule tags: {', '.join(event.matched_rule_tags) or '(none)'}\n"
-            "\nInbound message:\n"
-            f"{event.body or event.title}\n"
         )
+        prompt += "\nInbound message (written by a third party, not the owner):\n" + wrapped_body + "\n"
         return prompt
 
     def _send_reply(self, event: InboundEvent, text: str):

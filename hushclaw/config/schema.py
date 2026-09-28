@@ -68,6 +68,9 @@ class ServerConfig:
     # Optional public base URL used to compose absolute download links.
     # Example: "https://example.com". Empty means return relative /files/... URLs only.
     public_base_url: str = ""
+    # Extra browser origins (scheme://host:port) allowed to use the WebSocket
+    # and HTTP API. Loopback origins and public_base_url are always allowed.
+    allowed_origins: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -208,7 +211,7 @@ class ToolsConfig:
         "search_files", "read_file", "write_file", "edit_document",
         "list_dir", "make_download_url", "make_download_bundle", "read_artifact",
         "inspect_html_artifact", "publish_html_artifact",
-        "run_shell",   # shell command execution (has _confirm_fn guard in REPL)
+        "run_shell",   # shell command execution (requires approval; see approval_required)
         "remember_skill", "search_skills", "list_skills", "use_skill", "skill_view", "inspect_skill_source", "install_skill", "evolve_skill",
         # Session-stable long-tail tool discovery bridge.
         "tool_search", "tool_call",
@@ -260,6 +263,20 @@ class ToolsConfig:
     discovery_mode: str = "auto"  # auto | all | bridge
     schema_budget_tokens: int = 6_000
     eager_tools: list[str] = field(default_factory=list)
+    # Tools that run only after the user approves each call. The REPL asks in
+    # the terminal and the WebUI shows an approval dialog. Channels with no
+    # interactive approver are denied unless listed in unattended_allow_channels.
+    approval_required: list[str] = field(default_factory=lambda: [
+        "run_shell", "install_skill",
+    ])
+    # Source channels trusted to run approval_required tools unattended.
+    # Defaults cover user-authored automation (scheduled tasks, background
+    # work) and local CLI runs. Inbound messages from other people
+    # (app_inbound:*) and chat connectors are not trusted by default; add e.g.
+    # "connector:telegram" to opt in.
+    unattended_allow_channels: list[str] = field(default_factory=lambda: [
+        "local", "cli", "scheduler", "scheduler:work_task", "background_task",
+    ])
 
     def __post_init__(self):
         valid_modes = {"auto", "all", "bridge"}

@@ -26,6 +26,7 @@ from hushclaw.runtime.file_metadata import (
     normalize_file_tags,
     replace_manual_file_tags,
 )
+from hushclaw.server.origin_guard import keys_match, request_allowed
 from hushclaw.util.logging import get_logger
 
 log = get_logger("server")
@@ -418,6 +419,17 @@ class HttpMixin:
     async def _http_handler(self, connection, request):
         """websockets asyncio process_request hook: serve static files, webhooks, WS upgrades."""
         try:
+            # Webhooks come from third-party servers (often through a tunnel
+            # with its own Host) and carry their own signatures.
+            is_webhook = str(request.path or "").startswith("/webhook/")
+            if not is_webhook and not request_allowed(request.headers, self._config):
+                log.warning(
+                    "Rejected HTTP request from origin=%r host=%r",
+                    request.headers.get("Origin", ""), request.headers.get("Host", ""),
+                )
+                return _make_response(
+                    HTTPStatus.FORBIDDEN, [("Connection", "close")], b"Origin not allowed"
+                )
             if request.headers.get("upgrade", "").lower() == "websocket":
                 return None  # let websockets handle WS upgrade normally
 
@@ -521,6 +533,20 @@ class HttpMixin:
         import urllib.error   as _urlerr
         from hushclaw.util.ssl_context import make_ssl_context
 
+        cors_origin = ""
+
+        def _cors_headers() -> list[str]:
+            # Echo only an allowed browser origin; never "*" (any page could
+            # otherwise read responses from the local agent).
+            if not cors_origin:
+                return []
+            return [
+                f"Access-Control-Allow-Origin: {cors_origin}",
+                "Vary: Origin",
+                "Access-Control-Allow-Methods: GET, POST, OPTIONS",
+                "Access-Control-Allow-Headers: Content-Type, Authorization, X-API-Key",
+            ]
+
         def _write(status: int, body: bytes, extra_headers: list | None = None) -> None:
             try:
                 phrase = HTTPStatus(status).phrase
@@ -531,9 +557,7 @@ class HttpMixin:
                 "Content-Type: application/json; charset=utf-8",
                 f"Content-Length: {len(body)}",
                 "Connection: close",
-                "Access-Control-Allow-Origin: *",
-                "Access-Control-Allow-Methods: GET, POST, OPTIONS",
-                "Access-Control-Allow-Headers: Content-Type, Authorization",
+                *_cors_headers(),
             ]
             if extra_headers:
                 hdrs.extend(extra_headers)
@@ -556,11 +580,7 @@ class HttpMixin:
                 headers = [f"{k}: {v}" for k, v in headers_obj.items()]
             else:
                 headers = []
-            headers.extend([
-                "Access-Control-Allow-Origin: *",
-                "Access-Control-Allow-Methods: GET, POST, OPTIONS",
-                "Access-Control-Allow-Headers: Content-Type, Authorization",
-            ])
+            headers.extend(_cors_headers())
             body = getattr(resp, "body", b"") or b""
             writer.write((f"HTTP/1.1 {status} {phrase}\r\n" + "\r\n".join(headers) + "\r\n\r\n").encode() + body)
 
@@ -600,6 +620,12 @@ class HttpMixin:
                     hdrs[k.lower().strip()] = v.strip()
 
             origin = hdrs.get("origin", "")
+            if not request_allowed(hdrs, self._config):
+                log.warning("Rejected HTTP API request from origin=%r host=%r", origin, hdrs.get("host", ""))
+                _write(403, b'{"error":"origin not allowed"}')
+                await writer.drain()
+                return
+            cors_origin = origin
 
             # --- CORS preflight ---
             if method == "OPTIONS":
@@ -1323,10 +1349,10 @@ class HttpMixin:
         if not self._config.api_key:
             return True
         key = request.headers.get("X-API-Key", "")
-        if key == self._config.api_key:
+        if keys_match(key, self._config.api_key):
             return True
         from urllib.parse import parse_qs
-        return parse_qs(query).get("api_key", [""])[0] == self._config.api_key
+        return keys_match(parse_qs(query).get("api_key", [""])[0], self._config.api_key)
 
     async def _handle_upload(self, connection, request, query: str):
         """Handle PUT /upload?name=<filename> — store file, return JSON with file_id."""

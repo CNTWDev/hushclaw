@@ -33,6 +33,7 @@ from hushclaw.server.http_mixin import HttpMixin
 from hushclaw.server.config_mixin import ConfigMixin
 from hushclaw.server.chat_mixin import ChatMixin
 from hushclaw.server.calendar_mixin import CalendarMixin
+from hushclaw.server.origin_guard import keys_match, request_allowed, warn_if_exposed
 
 log = get_logger("server")
 
@@ -632,6 +633,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             )
             if self._config.api_key:
                 print("API key authentication enabled (X-API-Key header).")
+            warn_if_exposed(self._config, log)
             # Defer non-critical startup work so the WebSocket is ready to
             # accept the first browser connection without waiting for connectors
             # (which may call ensure_package / do initial network I/O) and other
@@ -654,10 +656,19 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
     # ── WebSocket client handler ───────────────────────────────────────────────
 
     async def _handle_client(self, ws) -> None:
+        headers = getattr(getattr(ws, "request", None), "headers", None)
+        if not request_allowed(headers, self._config):
+            log.warning(
+                "Rejected WebSocket from disallowed origin=%r host=%r",
+                headers.get("Origin", "") if headers is not None else "",
+                headers.get("Host", "") if headers is not None else "",
+            )
+            await ws.close(1008, "Origin not allowed")
+            return
         api_key_authenticated = False
         if self._config.api_key:
             key = _request_api_key(ws)
-            if key == self._config.api_key:
+            if keys_match(key, self._config.api_key):
                 api_key_authenticated = True
             else:
                 await ws.close(1008, "Unauthorized")
@@ -708,6 +719,18 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                     await self._subscribe_session(ws, sid)
                     if sid:
                         owned_sids.add(sid)
+
+                elif msg_type == "approval_response":
+                    sid = data.get("session_id", "")
+                    entry = await self._get_session_entry(sid)
+                    resolved_ok = False
+                    if entry is not None and hasattr(entry, "resolve_approval"):
+                        resolved_ok = entry.resolve_approval(
+                            str(data.get("approval_id") or ""),
+                            bool(data.get("approved")),
+                        )
+                    if not resolved_ok:
+                        log.info("approval_response ignored (unknown or expired) session=%s", sid[:12])
 
                 elif msg_type == "browser_handover_done":
                     sid = data.get("session_id", "")

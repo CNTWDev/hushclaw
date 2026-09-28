@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 
 # ── Module-level session constants ─────────────────────────────────────────────
 
+_APPROVAL_TIMEOUT_S = 300.0
 _BUFFER_LIMIT = 50    # hot-cache fallback — events table is the primary replay store
 _SESSION_TTL  = 1800  # seconds to retain a finished session entry (30 min)
 _MAX_PENDING_AMENDMENTS = 5
@@ -125,6 +126,57 @@ class _SessionEntry:
     runtime_thread: _RuntimeThreadState = _dc_field(default_factory=_RuntimeThreadState)
     runtime_run: _RuntimeRunState = _dc_field(default_factory=_RuntimeRunState)
     child_runs: dict[str, _RuntimeChildRunState] = _dc_field(default_factory=dict)
+    pending_approvals: dict[str, asyncio.Future] = _dc_field(default_factory=dict)
+
+    async def request_approval(
+        self,
+        tool: str,
+        arguments: dict | None = None,
+        *,
+        summary: str = "",
+        timeout: float = _APPROVAL_TIMEOUT_S,
+    ) -> bool:
+        """Ask the WebUI user to approve a sensitive tool call.
+
+        The request travels through the normal session sink so a client that
+        reconnects mid-run still receives it. Unanswered requests are denied
+        after ``timeout`` seconds.
+        """
+        approval_id = make_id("apr-")
+        future: asyncio.Future = asyncio.get_running_loop().create_future()
+        self.pending_approvals[approval_id] = future
+        expires_at = int((time.time() + timeout) * 1000)
+        try:
+            await publish_session_event(self, {
+                "type": "approval_request",
+                "approval_id": approval_id,
+                "tool": tool,
+                "summary": summary,
+                "arguments": arguments or {},
+                "expires_at": expires_at,
+            })
+            try:
+                approved = bool(await asyncio.wait_for(asyncio.shield(future), timeout))
+            except asyncio.TimeoutError:
+                approved = False
+        finally:
+            self.pending_approvals.pop(approval_id, None)
+        try:
+            await publish_session_event(self, {
+                "type": "approval_resolved",
+                "approval_id": approval_id,
+                "approved": approved,
+            })
+        except Exception:
+            pass
+        return approved
+
+    def resolve_approval(self, approval_id: str, approved: bool) -> bool:
+        future = self.pending_approvals.get(str(approval_id or ""))
+        if future is None or future.done():
+            return False
+        future.set_result(bool(approved))
+        return True
 
     def is_running(self) -> bool:
         return self.task is not None and not self.task.done()
