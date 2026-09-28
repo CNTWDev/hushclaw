@@ -15,6 +15,6 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install
-        run: pip install -e ".[all]"
+        run: pip install -e ".[all]" pytest pytest-asyncio
       - name: Test
         run: python -m pytest tests/ -v

@@ -275,6 +275,7 @@ class SessionLog:
                         "input_tokens": int(payload.get("input_tokens") or 0),
                         "output_tokens": int(payload.get("output_tokens") or 0),
                         "source_event_id": event.get("event_id", ""),
+                        "changes": payload.get("changes") if isinstance(payload.get("changes"), list) else [],
                     })
                 continue
 
