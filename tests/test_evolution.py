@@ -155,10 +155,18 @@ class TestDefaultContextEngineAssemble:
         fake_local = datetime.fromisoformat("2026-04-20T00:30:00+08:00")
 
         class FakeDateTime(datetime):
+            # Pin the "local" zone to +08:00 so the test does not depend on
+            # the host's TZ (CI runners are UTC).
+            def astimezone(self, tz=None):
+                if tz is None:
+                    return fake_local
+                return fake_local.astimezone(tz)
+
             @classmethod
             def now(cls, tz=None):
                 if tz is None:
-                    return fake_local.replace(tzinfo=None)
+                    naive = fake_local.replace(tzinfo=None)
+                    return cls(naive.year, naive.month, naive.day, naive.hour, naive.minute)
                 return fake_local.astimezone(tz)
 
         monkeypatch.setattr("hushclaw.context.engine.datetime", FakeDateTime)

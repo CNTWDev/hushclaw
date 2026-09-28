@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 
@@ -207,7 +208,8 @@ def test_ui_foundations_match_the_measured_product_control_scale():
     assert index_html.index('/styles/harness-shell.css') < index_html.index('/styles/ui-foundations.css')
     assert index_html.index('/styles/ui-foundations.css') < index_html.index('/styles/chat-product.css')
     assert '"/styles/ui-foundations.css"' in sw_js
-    assert 'const CACHE = "hushclaw-v53";' in sw_js
+    # Any bump is fine; pinning one number breaks on every asset change.
+    assert re.search(r'const CACHE = "hushclaw-v\d+";', sw_js)
     assert '--sans: -apple-system, BlinkMacSystemFont' in ui_css
     assert '--ui-type-body: 13px;' in ui_css
     assert '--ui-type-reading: 13.5px;' in ui_css
@@ -405,7 +407,7 @@ def test_connections_panel_unifies_apps_channels_and_sync_sources():
     assert 'No Settings or Wizard hand-off is required.' in panel_js
     assert 'title: `${isAppPanel || _isChannelConnection(item) ? "Configure" : "View"} ${item.name}`' in panel_js
     assert 'Open Integrations' in panel_js
-    assert '<span>Connections</span>' in index_html
+    assert '<span data-i18n="ui:Connections">Connections</span>' in index_html
     assert 'data-desc="Manage apps, channels, and sync sources"' in index_html
     assert '.app-connector-kind-chip {' in panel_css
     assert '.app-connector-card-telegram {' in panel_css
@@ -636,9 +638,9 @@ def test_runtime_monitor_defaults_to_expanded_log_and_files_lead_workbench():
     assert index_html.index('id="files-sidebar"') < index_html.index('id="runtime-monitor"')
     assert 'class="workbench-card workbench-section workbench-files hidden"' in index_html
     assert 'class="workbench-card workbench-section runtime-monitor hidden"' in index_html
-    assert '<div class="workbench-preview-kicker">Runtime</div>' in index_html
-    assert '<div class="workbench-section-title">Execution monitor</div>' in index_html
-    assert 'aria-expanded="true" aria-controls="session-runtime-log">Collapse</button>' in index_html
+    assert '<div class="workbench-preview-kicker" data-i18n="ui:Runtime">Runtime</div>' in index_html
+    assert '<div class="workbench-section-title" data-i18n="ui:Execution monitor">Execution monitor</div>' in index_html
+    assert 'aria-expanded="true" aria-controls="session-runtime-log" data-i18n="ui:Collapse">Collapse</button>' in index_html
     assert 'setWorkbenchPanelVisible("files", legacy !== "true");' in files_js
     assert 'toggleWorkbenchPanel("files");' in files_js
     assert 'const preferredVisible = isWorkbenchPanelPreferredVisible("files");' in files_js
