@@ -665,5 +665,20 @@ export const UI_MESSAGES = Object.fromEntries([
   ["Loading evidence…", "正在加载依据…"],
   ["Loading events…", "正在加载事件…"],
   ["{n} configured connections", "{n} 个已配置连接"],
-  ["Email", "邮箱"]
+  ["Email", "邮箱"],
+
+  ["This turn", "本轮更新"],
+  ["Remembered {n}", "记住 {n} 条"],
+  ["{n} skills updated", "更新 {n} 个技能"],
+  ["Goals updated", "更新了长期目标"],
+  ["{n} files changed", "改动 {n} 个文件"],
+  ["Skill", "技能"],
+  ["Goals", "目标"],
+  ["File", "文件"],
+  ["Undo", "撤销"],
+  ["Confirm undo", "确认撤销"],
+  ["Forget this memory", "忘掉这条记忆"],
+  ["Forgotten", "已忘掉"],
+  ["Open", "打开"],
+  ["Show {n} more", "再显示 {n} 项"]
 ].flatMap(([en, zh]) => [[en, { en, zh }], [zh, { en, zh }]]));

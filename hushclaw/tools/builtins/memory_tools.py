@@ -72,8 +72,15 @@ def remember(
         scope=scope,
         metadata={"title": title, "tags": tags or [], "note_type": note_type, "memory_kind": resolved_kind},
     )
-    return ToolResult.ok(
-        f"Saved to memory (id={note_id[:8]}, scope={scope}, type={note_type}, kind={resolved_kind})"
+    return ToolResult(
+        content=f"Saved to memory (id={note_id[:8]}, scope={scope}, type={note_type}, kind={resolved_kind})",
+        metadata={"change": {
+            "kind": "memory",
+            "action": "created",
+            "title": title or content,
+            "detail": content,
+            "ref": {"note_id": note_id, "note_type": note_type, "scope": scope},
+        }},
     )
 
 
@@ -178,7 +185,16 @@ def remember_skill(
 
     try:
         path = _skill_manager.create(name, content, description)
-        return ToolResult.ok(f"Skill '{name}' saved to {path}. Available immediately via use_skill.")
+        return ToolResult(
+            content=f"Skill '{name}' saved to {path}. Available immediately via use_skill.",
+            metadata={"change": {
+                "kind": "skill",
+                "action": "saved",
+                "title": name,
+                "detail": description or content,
+                "ref": {"skill": name},
+            }},
+        )
     except ValueError as exc:
         return ToolResult.error(str(exc))
 
@@ -202,4 +218,13 @@ def update_global_state(
     if _memory_store is None:
         return ToolResult.error("Memory store not available")
     _memory_store.save_global_working_state(text.strip())
-    return ToolResult.ok("Global working state updated. It will be injected into future sessions.")
+    return ToolResult(
+        content="Global working state updated. It will be injected into future sessions.",
+        metadata={"change": {
+            "kind": "state",
+            "action": "updated",
+            "title": "Persistent goals",
+            "detail": text.strip(),
+            "ref": {},
+        }},
+    )

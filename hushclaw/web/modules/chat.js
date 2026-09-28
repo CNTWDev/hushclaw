@@ -19,6 +19,7 @@ import {
 } from "./chat/tools.js";
 import { addCopyActions } from "./chat/export.js";
 import { attachUnderstanding } from "./chat/understanding.js";
+import { attachTurnChanges } from "./chat/turn-changes.js";
 import { AI_STATES, applyAiState, createAgentActivity, runtimeActivityLabel, thinkingActivityDetail } from "./ui/ai-primitives.js";
 import { followStreamTail } from "./chat/stream-tail.js";
 
@@ -831,7 +832,7 @@ function _refreshMessageActions(msgEl) {
   addCopyActions(msgEl, bubbleEl, contentEl, new Date());
 }
 
-export function applyLiveMessageIds({ userMessageId = "", assistantMessageId = "", clientTurnId = "", understanding } = {}) {
+export function applyLiveMessageIds({ userMessageId = "", assistantMessageId = "", clientTurnId = "", understanding, changes } = {}) {
   const turnId = String(clientTurnId || "").trim();
   const userMsgEl = (turnId && _userMsgElsByClientTurn.get(turnId)) || state._lastUserMsgEl;
   const aiMsgEl = (turnId && _aiMsgElsByClientTurn.get(turnId)) || state._aiMsgEl;
@@ -845,6 +846,7 @@ export function applyLiveMessageIds({ userMessageId = "", assistantMessageId = "
     _refreshMessageActions(aiMsgEl);
     attachUnderstanding(aiMsgEl, understanding);
   }
+  if (aiMsgEl && Array.isArray(changes) && changes.length) attachTurnChanges(aiMsgEl, changes);
 }
 
 export function insertSystemMsg(text) {
@@ -1205,6 +1207,7 @@ function _renderOneTurn(t, parent = els.messages) {
     });
     addCopyActions(msgEl, bubbleEl, contentEl, ts);
     attachUnderstanding(msgEl);
+    attachTurnChanges(msgEl, t.changes);
     parent.appendChild(msgEl);
   }
   if (parent === els.messages) {

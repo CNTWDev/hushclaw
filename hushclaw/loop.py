@@ -27,6 +27,7 @@ from hushclaw.runtime.sandbox import SandboxManager
 from hushclaw.runtime.semantic_intent import SemanticIntentService
 from hushclaw.runtime.strategy import TaskStrategy, classify_task
 from hushclaw.runtime.tool_runtime import ToolCall, ToolRuntime
+from hushclaw.runtime.turn_changes import TurnChangeLog
 from hushclaw.runtime.tool_surface import DEFAULT_EAGER_TOOLS, ToolSurfaceSnapshot
 from hushclaw.runtime.threat_patterns import unwrap_untrusted_context
 from hushclaw.search import clear_shared_search_negative_cache
@@ -991,6 +992,7 @@ class AgentLoop:
         _t0 = time.monotonic()
         _workspace_tag: str = (workspace_name or "").strip()
         clear_shared_search_negative_cache()
+        _turn_changes = TurnChangeLog()
         _perf: dict[str, int | str] = {
             "assemble_ms": 0,
             "preflight_compaction_ms": 0,
@@ -1125,6 +1127,7 @@ class AgentLoop:
                     await self._best_effort_event_fail(_tc_eid, str(_exc))
                     raise
                 tool_result_event = self._tool_result_event(tool_name=tc.name, result=result, call_id=tc.id)
+                _turn_changes.record(tc.name, tc.input, result)
                 if result.is_error:
                     await self._best_effort_event_fail(_tc_eid, result.content[:500])
                 else:
@@ -1668,6 +1671,7 @@ class AgentLoop:
                         await self._best_effort_event_fail(_eid, str(_exc))
                         raise
                     tool_result_event = self._tool_result_event(tool_name=_tc.name, result=_res, call_id=_tc.id)
+                    _turn_changes.record(_tc.name, _tc.input, _res)
                     if _res.is_error:
                         await self._best_effort_event_fail(_eid, _res.content[:500])
                     else:
@@ -1772,6 +1776,7 @@ class AgentLoop:
                     await self._best_effort_event_fail(_tc_eid, str(_exc))
                     raise
                 tool_result_event = self._tool_result_event(tool_name=tc.name, result=result, call_id=tc.id)
+                _turn_changes.record(tc.name, tc.input, result)
                 if result.is_error:
                     await self._best_effort_event_fail(_tc_eid, result.content[:500])
                 else:
@@ -1898,6 +1903,7 @@ class AgentLoop:
                     "text": final_text,
                     "text_len": len(final_text),
                     "stop_reason": _last_stop_reason,
+                    "changes": _turn_changes.snapshot(),
                     "rounds": round_num,
                     "input_tokens": _input_tokens,
                     "output_tokens": _output_tokens,
@@ -1941,6 +1947,7 @@ class AgentLoop:
             "type": "done",
             "text": final_text,
             "understanding": understanding,
+            "changes": _turn_changes.snapshot(),
             "input_tokens": _input_tokens,
             "output_tokens": _output_tokens,
             "stop_reason": _last_stop_reason,
