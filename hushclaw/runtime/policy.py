@@ -31,6 +31,25 @@ _BLOCKED_DELETE_PREFIXES = (
 )
 
 
+# Mirrors ToolsConfig defaults for runtimes built without a full config.
+DEFAULT_APPROVAL_REQUIRED: tuple[str, ...] = ("run_shell", "install_skill")
+DEFAULT_UNATTENDED_CHANNELS: tuple[str, ...] = (
+    "local", "cli", "scheduler", "scheduler:work_task", "background_task",
+)
+
+
+def approval_summary(tool_name: str, arguments: dict[str, Any] | None) -> str:
+    """One-line human description of a sensitive call for approval prompts."""
+    args = arguments or {}
+    if tool_name == "run_shell":
+        return f"Run shell command: {args.get('command', '')}"
+    if tool_name == "install_skill":
+        source = args.get("url") or args.get("source") or args.get("repo") or args.get("name") or ""
+        return f"Install skill (may pip-install packages and run its code): {source}"
+    preview = ", ".join(f"{k}={str(v)[:80]}" for k, v in list(args.items())[:4])
+    return f"{tool_name}({preview})"
+
+
 @dataclass(slots=True)
 class PolicyDecision:
     allowed: bool

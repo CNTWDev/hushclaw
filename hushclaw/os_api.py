@@ -732,7 +732,17 @@ class AgentOSService:
         """Application boundary for explicit user evaluation; never runs tools or models."""
         store = self.gateway.memory.message_feedback
         if update is not None:
-            return store.save(message_id, session_id, update)
+            before = store.list(message_id, session_id)
+            after = store.save(message_id, session_id, update)
+            from hushclaw.learning.feedback_bridge import apply_message_feedback  # noqa: PLC0415
+            apply_message_feedback(
+                self.gateway.memory,
+                message_id=self.gateway.memory._canonical_message_id(message_id) or message_id,
+                session_id=session_id,
+                before=before,
+                after=after,
+            )
+            return after
         return store.list(message_id, session_id)
 
     def list_profile_facts(

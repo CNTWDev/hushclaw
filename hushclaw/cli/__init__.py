@@ -279,6 +279,49 @@ def cmd_serve(args, runtime) -> int:
     return 0
 
 
+def cmd_eval_list(args, runtime) -> int:
+    cases = runtime.agent.memory.eval_cases.list(kind=args.kind or "", limit=args.limit)
+    if not cases:
+        print("No personal eval cases yet. They are created when you correct or rate an answer.")
+        return 0
+    for case in cases:
+        runs = runtime.agent.memory.eval_cases.last_runs(case["case_id"], limit=1)
+        last = "never run" if not runs else ("pass" if runs[0]["passed"] else "FAIL")
+        prompt = " ".join(case["prompt"].split())[:70]
+        print(f"  {case['case_id']}  {case['kind']:<17} {last:<9} {prompt}")
+    return 0
+
+
+def cmd_eval_run(args, runtime) -> int:
+    from hushclaw.learning.eval_runner import (  # noqa: PLC0415
+        agent_answer_fn, llm_judge, read_only_tool_names, run_eval_cases,
+    )
+    agent = runtime.agent
+    cases = agent.memory.eval_cases.list(kind=args.kind or "", limit=args.limit)
+    if not cases:
+        print("No personal eval cases yet. They are created when you correct or rate an answer.")
+        return 0
+    cfg = agent.config.agent
+    judge_model = getattr(cfg, "cheap_model", "") or getattr(cfg, "model", "")
+    # Replays may only read; this override lives in this process only.
+    cfg.allowed_tools = read_only_tool_names(agent.registry)
+    print(f"Replaying {len(cases)} case(s) with read-only tools…")
+    report = asyncio.run(run_eval_cases(
+        agent.memory,
+        cases,
+        answer_fn=agent_answer_fn(agent, runtime.gateway),
+        judge_fn=llm_judge(agent.provider, judge_model),
+    ))
+    if args.json:
+        import json as _json  # noqa: PLC0415
+        print(_json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
+    else:
+        for r in report.results:
+            print(f"  {'pass' if r.passed else 'FAIL'}  {r.case_id}  {r.reason}")
+        print(f"\n{report.passed}/{report.total} passed  (batch {report.batch_id})")
+    return 0 if report.passed == report.total else 2
+
+
 def cmd_agents_list(args, runtime) -> int:
     for a in runtime.os_api.list_agents():
         desc = f"  {a['description']}" if a['description'] else ""
@@ -396,6 +439,15 @@ def _build_parser() -> argparse.ArgumentParser:
     rebuild_beliefs_p = sub.add_parser("rebuild-beliefs", help="Rebuild Belief Map buckets from historical belief/interest notes")
     rebuild_beliefs_p.add_argument("--dry-run", action="store_true", help="Show planned buckets without modifying memory.db")
 
+    eval_p = sub.add_parser("eval", help="Personal regression cases from your corrections and ratings")
+    eval_sub = eval_p.add_subparsers(dest="eval_command")
+    for name, help_text in (("list", "List cases"), ("run", "Replay cases and grade the answers")):
+        ep = eval_sub.add_parser(name, help=help_text)
+        ep.add_argument("--kind", choices=["correction", "negative_feedback", "endorsed"], default="")
+        ep.add_argument("--limit", type=int, default=50)
+        if name == "run":
+            ep.add_argument("--json", action="store_true", help="Print the report as JSON")
+
     serve_p = sub.add_parser("serve", help="Start the WebSocket server")
     serve_p.add_argument("--host", metavar="HOST")
     serve_p.add_argument("--port", type=int, metavar="PORT")
@@ -510,6 +562,10 @@ def main() -> None:
             sys.exit(cmd_rebuild_beliefs(args, runtime))
         elif args.command == "serve":
             sys.exit(cmd_serve(args, runtime))
+        elif args.command == "eval":
+            if getattr(args, "eval_command", None) == "run":
+                sys.exit(cmd_eval_run(args, runtime))
+            sys.exit(cmd_eval_list(args, runtime))
         elif args.command == "agents":
             cmd = getattr(args, "agents_command", None)
             if cmd == "list":

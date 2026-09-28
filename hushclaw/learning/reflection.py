@@ -17,6 +17,10 @@ class TaskTrace:
     turn_count: int = 0
     task_fingerprint: str = ""
     source_message_id: str = ""
+    assistant_message_id: str = ""
+    # The turn this one follows in the same session; used to attribute a
+    # correction in this turn's user message to the answer it corrects.
+    previous_turn: dict = field(default_factory=dict)
 
 
 @dataclass(slots=True)

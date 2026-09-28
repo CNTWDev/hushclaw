@@ -39,6 +39,7 @@ from hushclaw.memory.tasks import (
 )
 from hushclaw.memory.user_profile import UserProfileStore
 from hushclaw.memory.personalization import PersonalizationStore, relevance
+from hushclaw.memory.eval_cases import EvalCaseStore
 from hushclaw.memory.message_feedback import MessageFeedbackStore
 from hushclaw.memory.fts import FTSSearch, _build_fts_query
 from hushclaw.memory.kinds import (
@@ -103,6 +104,7 @@ class MemoryStore:
             self.user_profile = UserProfileStore(self.conn)
             self.personalization = PersonalizationStore(self)
             self.message_feedback = MessageFeedbackStore(self)
+            self.eval_cases = EvalCaseStore(self)
 
             # Session recall cache: (session_id, query) → (result_str, timestamp)
             self._recall_cache: dict[tuple[str, str], tuple[str, float]] = {}
@@ -2755,6 +2757,7 @@ class MemoryStore:
         notes = self.delete_notes_by_source_message(mid)
         self.personalization.forget_source(mid)
         self.message_feedback.forget(mid=mid)
+        self.eval_cases.forget(mid=mid)
         profile_facts = self.user_profile.delete_facts_by_source_message(mid)
         reflections = self.delete_reflections_by_source_message(mid)
         return {
@@ -2987,6 +2990,7 @@ class MemoryStore:
     def delete_session(self, session_id: str) -> bool:
         """Delete all turns for a session from the DB and its summary file."""
         self.message_feedback.forget(sid=session_id)
+        self.eval_cases.forget(sid=session_id)
         self.conn.execute('DELETE FROM understanding_receipts WHERE session_id=?', (session_id,))
         self.conn.execute("DELETE FROM learning_jobs WHERE json_extract(payload, '$.trace.session_id')=?", (session_id,))
         self.conn.execute("DELETE FROM turns_fts WHERE session=?", (session_id,))

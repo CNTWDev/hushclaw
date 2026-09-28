@@ -31,6 +31,22 @@ def scan_text(text: str) -> ThreatScan:
     return ThreatScan(labels=labels)
 
 
+_BOUNDARY_RE = re.compile(
+    r"-{3,}\s*(BEGIN|END)\s+UNTRUSTED\s+CONTENT\s*-{3,}|<\s*/?\s*untrusted_context\b",
+    re.I,
+)
+
+
+def _defang_boundaries(value: str) -> str:
+    """Neutralize wrapper markers inside content so it cannot close its own block."""
+    def _sub(match: re.Match[str]) -> str:
+        text = match.group(0)
+        if text.lstrip().startswith("<"):
+            return text.replace("<", "&lt;", 1)
+        return "[" + text.strip("-").strip() + " (quoted)]"
+    return _BOUNDARY_RE.sub(_sub, value)
+
+
 def wrap_untrusted_context(
     content: str,
     *,
@@ -39,7 +55,7 @@ def wrap_untrusted_context(
     trusted: bool = False,
 ) -> tuple[str, ThreatScan]:
     """Wrap external/recalled/tool content with provenance and instruction boundary."""
-    value = str(content or "")
+    value = _defang_boundaries(str(content or ""))
     scan = scan_text(value)
     label_text = ", ".join(scan.labels) if scan.labels else "none"
     header = (
