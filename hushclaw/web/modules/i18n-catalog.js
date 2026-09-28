@@ -669,5 +669,20 @@ export const UI_MESSAGES = Object.fromEntries([
   ["Allow this action?", "允许这个操作吗？"],
   ["The assistant wants to run a sensitive action. Only allow it if you expected it.", "助手想执行一个敏感操作。只有在你预期到它时才允许。"],
   ["Allow", "允许"],
-  ["Deny", "拒绝"]
+  ["Deny", "拒绝"],
+
+  ["This turn", "本轮更新"],
+  ["Remembered {n}", "记住 {n} 条"],
+  ["{n} skills updated", "更新 {n} 个技能"],
+  ["Goals updated", "更新了长期目标"],
+  ["{n} files changed", "改动 {n} 个文件"],
+  ["Skill", "技能"],
+  ["Goals", "目标"],
+  ["File", "文件"],
+  ["Undo", "撤销"],
+  ["Confirm undo", "确认撤销"],
+  ["Forget this memory", "忘掉这条记忆"],
+  ["Forgotten", "已忘掉"],
+  ["Open", "打开"],
+  ["Show {n} more", "再显示 {n} 项"]
 ].flatMap(([en, zh]) => [[en, { en, zh }], [zh, { en, zh }]]));

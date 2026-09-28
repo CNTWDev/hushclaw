@@ -19,6 +19,7 @@ import {
 import { refreshComposerAutocomplete } from "./events/autocomplete.js";
 import { toolActivityLabel, runtimeActivityLabel } from "./ui/ai-primitives.js";
 import { receiveUnderstanding } from "./chat/understanding.js";
+import { receiveTurnChangeUndo } from "./chat/turn-changes.js";
 import { receiveMessageFeedback } from './chat/feedback.js';
 
 import {
@@ -827,6 +828,7 @@ export function handleMessage(data) {
         assistantMessageId: data.assistant_message_id || "",
         clientTurnId: data.client_turn_id || "",
         understanding: data.understanding,
+        changes: data.changes,
       });
       debugUiLifecycle("session_done", { session_id: eventSessionId(data) || getCurrentSessionId(), tab: state.tab });
       finalizeAiMsgNow();
@@ -939,6 +941,7 @@ export function handleMessage(data) {
       }
       break;
     case "memory_deleted":
+      receiveTurnChangeUndo(data);
       onMemoryDeleted(data.note_id, data.ok);
       break;
     case "memory_overview":

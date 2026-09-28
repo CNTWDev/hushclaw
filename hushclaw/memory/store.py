@@ -2467,7 +2467,9 @@ class MemoryStore:
         replayed = self.session_log.replay_turns(session_id=session_id)
         if replayed:
             return self._materialize_message_references(
-                self._apply_message_states(replayed, include_hidden=False),
+                self._mark_removed_memory_changes(
+                    self._apply_message_states(replayed, include_hidden=False)
+                ),
                 session_id=session_id,
             )
         return self._materialize_message_references(
@@ -2551,6 +2553,29 @@ class MemoryStore:
             }
             for r in rows
         }
+
+    def _mark_removed_memory_changes(self, turns: list[dict]) -> list[dict]:
+        """Flag turn-change memory entries whose note has since been deleted."""
+        note_ids = {
+            str((c.get("ref") or {}).get("note_id") or "")
+            for t in turns for c in (t.get("changes") or [])
+            if isinstance(c, dict) and c.get("kind") == "memory"
+        } - {""}
+        if not note_ids:
+            return turns
+        placeholders = ",".join("?" * len(note_ids))
+        live = {
+            row[0] for row in self.conn.execute(
+                f"SELECT note_id FROM notes WHERE note_id IN ({placeholders})",
+                tuple(note_ids),
+            ).fetchall()
+        }
+        for t in turns:
+            for c in t.get("changes") or []:
+                note_id = str((c.get("ref") or {}).get("note_id") or "") if isinstance(c, dict) else ""
+                if note_id and note_id not in live:
+                    c["removed"] = True
+        return turns
 
     def _apply_message_states(self, turns: list[dict], *, include_hidden: bool) -> list[dict]:
         states = self._message_state_map([str(t.get("message_id") or "") for t in turns])

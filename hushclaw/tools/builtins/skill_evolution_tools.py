@@ -40,6 +40,15 @@ def evolve_skill(
             if not observation.strip():
                 return ToolResult.error("observation is required for patch mode")
             path = _skill_manager.patch(skill_name.strip(), observation.strip())
-        return ToolResult.ok(f"Skill '{skill_name}' evolved at {path}")
+        return ToolResult(
+            content=f"Skill '{skill_name}' evolved at {path}",
+            metadata={"change": {
+                "kind": "skill",
+                "action": "created" if mode == "create" else "updated",
+                "title": skill_name.strip(),
+                "detail": observation or description or workflow,
+                "ref": {"skill": skill_name.strip()},
+            }},
+        )
     except ValueError as exc:
         return ToolResult.error(str(exc))
